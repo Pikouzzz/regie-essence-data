@@ -24,7 +24,7 @@ jobs:
           python-version: "3.12"
 
       - name: Installer les dépendances
-        run: pip install openpyxl==3.1.5 requests shapely
+           run: pip install openpyxl==3.1.5 requests shapely
 
       - name: Télécharger et convertir l'export de la Régie
         run: python scripts/fetch_regie.py

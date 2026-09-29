@@ -12,10 +12,14 @@ from pathlib import Path
 
 import requests
 from openpyxl import load_workbook
+from shapely.geometry import Point, shape
 
 BASE      = "https://regieessencequebec.ca"
 XLSX_URL  = BASE + "/data/stations-{ts}.xlsx"
 OUT       = Path(__file__).resolve().parent.parent / "stations.json"
+RIVES     = Path(__file__).resolve().parent.parent / "data" / "rives.geojson"
+CORRECTIONS = Path(__file__).resolve().parent.parent / "data" / "rives_corrections.json"
+QC_BOITE  = (44.9, 63.5, -80.0, -56.0)   # lat min, lat max, lng min, lng max : hors de ça = coordonnées erronées
 MIN_STATIONS = 1000            # en dessous, on considère l'export invalide
 PRIX_MIN, PRIX_MAX = 50, 400   # ¢/L — hors de cette plage = donnée aberrante
 HEADERS   = {"User-Agent": "regie-essence-data (github.com/Pikouzzz/regie-essence-data)"}
@@ -111,6 +115,29 @@ def stable_id(banniere, adresse, lat, lng, seen):
     return base if seen[base] == 1 else f"{base}-{seen[base]}"
 
 
+# Rive de chaque station (N = nord du fleuve, S = sud, M = Îles-de-la-Madeleine)
+# Polygones simplifiés tirés de Natural Earth (domaine public), précision ≈ 1-2 km :
+# une station en bord de fleuve est rattachée à la rive la plus proche.
+_rives = None
+def rive(lat, lng):
+    global _rives
+    if lat is None or lng is None:
+        return None
+    if _rives is None:
+        gj = json.loads(RIVES.read_text(encoding="utf-8"))
+        _rives = [(f["properties"]["rive"], shape(f["geometry"])) for f in gj["features"]]
+    pt = Point(lng, lat)
+    for code, geom in _rives:
+        if geom.contains(pt):
+            return code
+    return min(_rives, key=lambda r: r[1].distance(pt))[0]
+
+
+def coord_valide(lat, lng):
+    return (lat is not None and lng is not None
+            and QC_BOITE[0] <= lat <= QC_BOITE[1] and QC_BOITE[2] <= lng <= QC_BOITE[3])
+
+
 def lire_excel(contenu):
     wb = load_workbook(io.BytesIO(contenu), read_only=True, data_only=True)
     ws = wb.worksheets[0]
@@ -128,11 +155,14 @@ def lire_excel(contenu):
         g = lambda k: r[idx[k]]
         txt = lambda k: str(g(k)).strip() if g(k) is not None else ""
         lat, lng = num(g("lat")), num(g("lng"))
+        if not coord_valide(lat, lng):
+            lat = lng = None
         banniere = txt("banniere")
         stations.append([
             stable_id(banniere, txt("adresse"), lat, lng, seen),
             txt("nom"), banniere, txt("adresse"), txt("region"), txt("cp"),
             lat, lng, prix(g("regulier")), prix(g("super")), prix(g("diesel")),
+            rive(lat, lng),
         ])
     return stations
 
@@ -169,6 +199,12 @@ def main():
             raise SystemExit("Téléchargement impossible.")
 
     stations = lire_excel(contenu)
+    # Corrections manuelles de rive (stations en bord de fleuve mal classées)
+    if CORRECTIONS.exists():
+        corr = json.loads(CORRECTIONS.read_text(encoding="utf-8"))
+        for st in stations:
+            if st[0] in corr:
+                st[-1] = corr[st[0]]
     if len(stations) < MIN_STATIONS:
         raise SystemExit(f"Seulement {len(stations)} stations : export jugé invalide, on garde l'ancien fichier.")
 
@@ -178,7 +214,7 @@ def main():
         "ts": dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "source": url,
         "count": len(stations),
-        "fields": ["id", "nom", "banniere", "adresse", "region", "cp", "lat", "lng", "regulier", "super", "diesel"],
+        "fields": ["id", "nom", "banniere", "adresse", "region", "cp", "lat", "lng", "regulier", "super", "diesel", "rive"],
         "stations": stations,
     }
     OUT.write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")

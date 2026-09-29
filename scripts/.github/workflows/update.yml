@@ -1,1 +1,42 @@
+name: Mise à jour des prix
 
+on:
+  schedule:
+    - cron: "*/15 * * * *"   # toutes les 15 min (heure UTC)
+  workflow_dispatch:          # bouton « Run workflow » pour lancer à la main
+
+permissions:
+  contents: write
+
+concurrency:
+  group: maj-prix
+  cancel-in-progress: false
+
+jobs:
+  maj:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Installer les dépendances
+        run: pip install openpyxl==3.1.5 requests
+
+      - name: Télécharger et convertir l'export de la Régie
+        run: python scripts/fetch_regie.py
+
+      - name: Publier si les données ont changé
+        run: |
+          git config user.name "regie-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add stations.json
+          if git diff --cached --quiet; then
+            echo "Aucun changement."
+            exit 0
+          fi
+          git commit -m "Prix du $(python -c "import json;print(json.load(open('stations.json'))['ts'])")"
+          git push

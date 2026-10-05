@@ -41,20 +41,30 @@ def log(*a):
     print(*a, flush=True)
 
 
+DELAI = (5, 10)            # secondes : connexion, lecture
+MAX_AGE_TOLERE_H = 3       # si la Régie est injoignable, on tolère des données de moins de 3 h sans alerter
+DUREE_MAX_S = 240          # le robot abandonne après 4 min au lieu de bloquer 15 min
+
+
+class SiteInjoignable(Exception):
+    pass
+
+
 def existe(url):
-    """True si l'URL répond 200 (GET en streaming, sans télécharger le contenu)."""
+    """'ok' si l'URL répond 200, 'absent' si 404/403…, 'erreur' si le site ne répond pas."""
     try:
-        with session.get(url, stream=True, timeout=10) as r:
-            return r.status_code == 200
+        with session.get(url, stream=True, timeout=DELAI) as r:
+            return "ok" if r.status_code == 200 else "absent"
     except requests.RequestException:
-        return False
+        return "erreur"
 
 
 def trouver_dernier_export():
     """Retourne (url, horodatage 'AAAAMMJJHHMMSS') du plus récent export disponible."""
+    debut = time.monotonic()
     # 1) Chercher le lien directement dans la page d'accueil
     try:
-        html = session.get(BASE + "/", timeout=15).text
+        html = session.get(BASE + "/", timeout=DELAI).text
         liens = sorted(set(re.findall(r"stations-(\d{14})\.xlsx", html)))
         if liens:
             ts = liens[-1]
@@ -66,14 +76,40 @@ def trouver_dernier_export():
     # 2) Sonder les tranches de 5 min récentes (UTC), secondes 00 à 09
     now = datetime.now(timezone.utc)
     slot = now.replace(second=0, microsecond=0, minute=now.minute - now.minute % 5)
+    erreurs_de_suite = 0
     for k in range(9):                         # jusqu'à 40 min en arrière
         base = slot - timedelta(minutes=5 * k)
         for sec in range(10):
+            if time.monotonic() - debut > DUREE_MAX_S:
+                raise SiteInjoignable("délai maximal dépassé pendant le sondage")
             ts = (base + timedelta(seconds=sec)).strftime("%Y%m%d%H%M%S")
-            if existe(XLSX_URL.format(ts=ts)):
+            etat = existe(XLSX_URL.format(ts=ts))
+            if etat == "ok":
                 log(f"Export trouvé par sondage : {ts}")
                 return XLSX_URL.format(ts=ts), ts
+            erreurs_de_suite = erreurs_de_suite + 1 if etat == "erreur" else 0
+            if erreurs_de_suite >= 3:
+                raise SiteInjoignable("le site ne répond pas (3 délais dépassés de suite)")
     return None, None
+
+
+def age_donnees_h():
+    """Âge en heures des données actuellement publiées (None si inconnu)."""
+    try:
+        ts = json.loads(OUT.read_text(encoding="utf-8"))["ts"]
+        dt = datetime.strptime(ts, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+        return (datetime.now(timezone.utc) - dt).total_seconds() / 3600
+    except Exception:
+        return None
+
+
+def abandon_tolere(raison):
+    """La Régie est injoignable : pas d'alerte si nos données sont encore récentes."""
+    age = age_donnees_h()
+    if age is not None and age < MAX_AGE_TOLERE_H:
+        log(f"::warning::Régie injoignable ({raison}). Données actuelles conservées (âge : {age:.1f} h).")
+        sys.exit(0)
+    raise SystemExit(f"Régie injoignable ({raison}) et données trop vieilles ({'inconnu' if age is None else f'{age:.1f} h'}).")
 
 
 def prix(v):
@@ -178,9 +214,12 @@ def main():
         m = re.search(r"(\d{14})", chemin.name)
         ts, url = (m.group(1) if m else datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")), str(chemin)
     else:
-        url, ts = trouver_dernier_export()
+        try:
+            url, ts = trouver_dernier_export()
+        except SiteInjoignable as e:
+            abandon_tolere(str(e))
         if not url:
-            raise SystemExit("Aucun export trouvé : le format d'URL de la Régie a peut-être changé.")
+            abandon_tolere("aucun export trouvé ; le format d'URL a peut-être changé")
         # Rien à faire si on a déjà cet export
         if OUT.exists():
             try:
@@ -191,7 +230,7 @@ def main():
                 pass
         for essai in range(3):
             try:
-                r = session.get(url, timeout=60)
+                r = session.get(url, timeout=(5, 60))
                 r.raise_for_status()
                 # Sécurité : on n'accepte que le domaine de la Régie (même après redirection) et une taille raisonnable
                 if not (urlparse(r.url).hostname or "").endswith("regieessencequebec.ca"):
@@ -204,7 +243,7 @@ def main():
                 log(f"Téléchargement échoué ({e}), nouvel essai…")
                 time.sleep(5)
         else:
-            raise SystemExit("Téléchargement impossible.")
+            abandon_tolere("téléchargement impossible")
 
     stations = lire_excel(contenu)
     # Corrections manuelles de rive (stations en bord de fleuve mal classées)

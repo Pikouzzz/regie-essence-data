@@ -7,6 +7,7 @@ Utilisation :
   python scripts/fetch_regie.py --file x.xlsx   # test avec un fichier local
 """
 import io, json, re, sys, time
+from urllib.parse import urlparse
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -22,6 +23,7 @@ CORRECTIONS = Path(__file__).resolve().parent.parent / "data" / "rives_correctio
 QC_BOITE  = (44.9, 63.5, -80.0, -56.0)   # lat min, lat max, lng min, lng max : hors de ça = coordonnées erronées
 MIN_STATIONS = 1000            # en dessous, on considère l'export invalide
 PRIX_MIN, PRIX_MAX = 50, 400   # ¢/L — hors de cette plage = donnée aberrante
+TAILLE_MAX = 20 * 1024 * 1024   # 20 Mo : un export normal fait ~300 Ko
 HEADERS   = {"User-Agent": "regie-essence-data (github.com/Pikouzzz/regie-essence-data)"}
 
 # Colonnes attendues dans l'Excel (repérées par leur nom, pas leur position)
@@ -153,7 +155,8 @@ def lire_excel(contenu):
         if not r or all(c is None for c in r):
             continue
         g = lambda k: r[idx[k]]
-        txt = lambda k: str(g(k)).strip() if g(k) is not None else ""
+        # Texte nettoyé : caractères de contrôle retirés, longueur limitée
+        txt = lambda k, n=150: re.sub(r"[\x00-\x1f\x7f]", " ", str(g(k))).strip()[:n] if g(k) is not None else ""
         lat, lng = num(g("lat")), num(g("lng"))
         if not coord_valide(lat, lng):
             lat = lng = None
@@ -190,6 +193,11 @@ def main():
             try:
                 r = session.get(url, timeout=60)
                 r.raise_for_status()
+                # Sécurité : on n'accepte que le domaine de la Régie (même après redirection) et une taille raisonnable
+                if not (urlparse(r.url).hostname or "").endswith("regieessencequebec.ca"):
+                    raise SystemExit(f"Redirection vers un domaine inattendu : {r.url}")
+                if len(r.content) > TAILLE_MAX:
+                    raise SystemExit("Fichier anormalement gros : abandon.")
                 contenu = r.content
                 break
             except requests.RequestException as e:

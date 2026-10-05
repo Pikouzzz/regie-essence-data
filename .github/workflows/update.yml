@@ -5,6 +5,7 @@ on:
     - cron: "*/15 * * * *"   # toutes les 15 min (heure UTC)
   workflow_dispatch:          # bouton « Run workflow » pour lancer à la main
 
+# Droits minimaux : le robot peut seulement modifier le contenu de ce dépôt
 permissions:
   contents: write
 
@@ -17,14 +18,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      # Actions épinglées sur une version précise (empreinte du commit) : protège contre une version piratée
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09   # v5.1.0
+        with:
+          persist-credentials: true
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1   # v6.3.0
         with:
           python-version: "3.12"
 
+      # Versions fixes ; defusedxml protège la lecture du fichier Excel contre les attaques XML
       - name: Installer les dépendances
-        run: pip install openpyxl==3.1.5 requests shapely
+        run: pip install openpyxl==3.1.5 requests==2.34.2 shapely==2.1.2 defusedxml==0.7.1
 
       - name: Télécharger et convertir l'export de la Régie
         run: python scripts/fetch_regie.py

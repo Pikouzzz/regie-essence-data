@@ -27,26 +27,29 @@
 <main>
   <a class="retour" href="./">← Retour à Écono Gaz</a>
   <h1>Politique de confidentialité</h1>
-  <p class="maj">Dernière mise à jour : 30 septembre 2026</p>
+  <p class="maj">Dernière mise à jour : 15 octobre 2026</p>
 
   <div class="resume">
     <strong>En bref</strong>
     <ul>
-      <li>Aucun compte, aucun témoin (cookie), aucune publicité ciblée, aucune statistique de suivi.</li>
+      <li>Aucun compte, aucun témoin (cookie), aucune publicité ciblée. Seul un compteur de visites anonyme, désactivable, est utilisé.</li>
       <li>Ta position reste sur ton appareil. Elle n'est jamais envoyée à Écono Gaz.</li>
-      <li>Tes favoris et réglages sont enregistrés uniquement dans ton navigateur. Tu peux les effacer à tout moment.</li>
+      <li>Si tu utilises « Trajet », ton point de départ (arrondi à environ 1 km) et ta destination sont envoyés au service d'itinéraire OSRM, seulement quand tu le demandes.</li>
+      <li>Tes favoris, réglages et derniers trajets sont enregistrés uniquement dans ton navigateur. Tu peux les effacer à tout moment.</li>
     </ul>
   </div>
 
   <h2>1. Qui sommes-nous</h2>
-  <p>Écono Gaz est une application web indépendante qui affiche les prix de l'essence au Québec. Elle n'est pas affiliée à la Régie de l'énergie du Québec. Les prix proviennent des données publiques de la Régie (regieessencequebec.ca).</p>
+  <p>Écono Gaz est une application web indépendante qui affiche les prix de l'essence au Québec. Elle n'est pas affiliée à la Régie de l'énergie du Québec et n'est pas mandatée par elle. Source des prix : Régie essence Québec, Régie de l'énergie (regieessencequebec.ca) ; les prix sont affichés tels que publiés.</p>
   <p><strong>Responsable de la protection des renseignements personnels</strong> : le fondateur d'Écono Gaz, joignable à <a href="mailto:econogaz.app@gmail.com">econogaz.app@gmail.com</a>.</p>
 
   <h2>2. Renseignements utilisés et pourquoi</h2>
   <table>
     <tr><th>Renseignement</th><th>Utilisation</th><th>Où il reste</th></tr>
-    <tr><td>Position géographique</td><td>Trouver les stations autour de toi et estimer la distance. Utilisée seulement quand tu touches « Me localiser », ou à l'ouverture si tu as activé « Me localiser automatiquement » dans les Réglages (désactivé par défaut).</td><td>Sur ton appareil seulement. Jamais transmise à Écono Gaz.</td></tr>
-    <tr><td>Favoris et réglages (carburant, distance, véhicule, app de navigation)</td><td>Personnaliser l'affichage.</td><td>Dans le stockage local de ton navigateur.</td></tr>
+    <tr><td>Position géographique</td><td>Trouver les stations autour de toi et estimer la distance. Utilisée seulement quand tu touches « Me localiser » (ou 📍 dans « Trajet »), ou à l'ouverture si tu as activé « Me localiser automatiquement » dans les Réglages (désactivé par défaut).</td><td>Sur ton appareil. Jamais transmise à Écono Gaz. Pour « Trajet » seulement : voir la ligne suivante.</td></tr>
+    <tr><td>Départ et destination d'un trajet</td><td>Calculer l'itinéraire pour trouver les stations le long de la route. Envoyés seulement quand tu touches « Trouver les stations ». Si le départ est ta position, elle est d'abord arrondie à environ 1 km. Les villes sont choisies dans une liste intégrée à l'app : rien n'est envoyé pendant que tu tapes.</td><td>Envoyés au service OSRM (FOSSGIS, Allemagne), qui calcule l'itinéraire. Écono Gaz ne les reçoit pas.</td></tr>
+    <tr><td>Visite anonyme (compteur)</td><td>Savoir combien de personnes utilisent l'app. Un compteur sans témoin (GoatCounter) reçoit la page vue, la taille de l'écran et l'adresse IP ; celle-ci sert seulement à reconnaître une même visite dans la journée, au moyen d'une empreinte temporaire, et n'est pas conservée. Désactivable dans Réglages › Statistiques ; désactivé aussi si ton navigateur demande « Ne pas me suivre » ou envoie le signal Global Privacy Control.</td><td>Chez GoatCounter, sous forme de statistiques globales.</td></tr>
+    <tr><td>Favoris, réglages et derniers trajets (carburant, distance, véhicule, app de navigation, noms des villes de départ et d'arrivée)</td><td>Personnaliser l'affichage. Ta position n'est jamais enregistrée.</td><td>Dans le stockage local de ton navigateur.</td></tr>
   </table>
   <p>Écono Gaz n'a pas de serveur qui reçoit ou conserve des renseignements personnels : l'application est un simple fichier publié en ligne.</p>
 
@@ -54,21 +57,24 @@
   <p>Pour fonctionner, l'application fait appel à quelques services qui reçoivent, comme tout site web, l'adresse IP de ton appareil :</p>
   <ul>
     <li><strong>GitHub Pages</strong> (GitHub, Inc.) héberge l'application et le fichier des prix.</li>
+    <li><strong>GoatCounter</strong> compte les visites de façon anonyme, sans témoin (voir plus haut).</li>
     <li><strong>OpenStreetMap</strong> (OpenStreetMap Foundation) fournit les images de la carte. Les zones de carte affichées sont donc demandées à ses serveurs.</li>
-    <li><strong>Apps de navigation</strong> (Plans, Google Maps ou Waze) : quand tu touches « Itinéraire », la destination leur est transmise et leurs propres politiques s'appliquent.</li>
+    <li><strong>OSRM, serveur de FOSSGIS e.V.</strong> (routing.openstreetmap.de, Allemagne) calcule l'itinéraire de « Trajet » à partir des données OpenStreetMap. Il reçoit le départ et la destination décrits plus haut.</li>
+    <li><strong>Apps de navigation</strong> (Plans, Google Maps ou Waze) : quand tu touches « Itinéraire » ou « Tout le trajet avec un arrêt ici », la destination (et, s'il y a lieu, le départ et l'arrêt) leur est transmise et leurs propres politiques s'appliquent.</li>
     <li><strong>Ton application de courriel</strong> : quand tu touches « Signaler un prix », le message est préparé dans ton app de courriel. Rien n'est envoyé sans ton action.</li>
   </ul>
   <p>Ces services peuvent être situés hors du Québec. Écono Gaz ne leur transmet aucun renseignement personnel de son propre chef.</p>
 
   <h2>4. Tes choix et tes droits</h2>
   <ul>
-    <li>Tu peux refuser ou retirer l'accès à la localisation dans les réglages de ton téléphone ou de ton navigateur. L'application fonctionne alors par région.</li>
+    <li>Tu peux refuser ou retirer l'accès à la localisation dans les réglages de ton téléphone ou de ton navigateur. L'application fonctionne alors par région, et « Trajet » par ville.</li>
+    <li>Tu peux utiliser Écono Gaz sans jamais toucher « Trouver les stations » : rien n'est alors envoyé au service d'itinéraire.</li>
     <li>Dans Écono Gaz : Réglages › Mes données › « Effacer mes favoris » et « Remettre les réglages par défaut ». Effacer les données du site dans ton navigateur supprime tout.</li>
     <li>Comme Écono Gaz ne détient aucun renseignement personnel à ton sujet, il n'y a rien à consulter ni à corriger de notre côté. Pour toute question ou plainte, écris au responsable ci-dessus. Tu peux aussi t'adresser à la Commission d'accès à l'information du Québec.</li>
   </ul>
 
   <h2>5. Sécurité</h2>
-  <p>L'application est servie uniquement en HTTPS, n'utilise aucun témoin, applique une politique de sécurité du contenu (CSP) qui bloque les scripts externes, et ne conserve aucune base de données de renseignements personnels.</p>
+  <p>L'application est servie uniquement en HTTPS, n'utilise aucun témoin, applique une politique de sécurité du contenu (CSP) qui bloque les scripts externes et limite les connexions aux seuls services nommés ci-dessus, et ne conserve aucune base de données de renseignements personnels.</p>
 
   <h2>6. Modifications</h2>
   <p>Cette politique peut être mise à jour, par exemple si de nouvelles fonctions sont ajoutées. La date de dernière mise à jour figure en haut de la page.</p>

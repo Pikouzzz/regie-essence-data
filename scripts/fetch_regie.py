@@ -113,7 +113,9 @@ def abandon_tolere(raison):
 
 
 def prix(v):
-    """'179.9¢' -> 179.9 ; 'N/D' / vide / aberrant -> None"""
+    """'179.9¢' -> 179.9 ; 'N/D' ou vide -> None.
+    Les valeurs sont conservées telles que publiées (exigence de la Régie : données non modifiées) ;
+    c'est l'app qui met de côté les prix inhabituels, sans les changer."""
     if v is None:
         return None
     if isinstance(v, (int, float)):
@@ -123,7 +125,7 @@ def prix(v):
         if not m:
             return None
         p = float(m.group().replace(",", "."))
-    return round(p, 1) if PRIX_MIN <= p <= PRIX_MAX else None
+    return p
 
 
 def num(v):
@@ -192,16 +194,15 @@ def lire_excel(contenu):
             continue
         g = lambda k: r[idx[k]]
         # Texte nettoyé : caractères de contrôle retirés, longueur limitée
-        txt = lambda k, n=150: re.sub(r"[\x00-\x1f\x7f]", " ", str(g(k))).strip()[:n] if g(k) is not None else ""
+        txt = lambda k, n=300: re.sub(r"[\x00-\x1f\x7f]", " ", str(g(k))).strip()[:n] if g(k) is not None else ""
         lat, lng = num(g("lat")), num(g("lng"))
-        if not coord_valide(lat, lng):
-            lat = lng = None
+        # Coordonnées conservées telles quelles ; la rive n'est calculée que si elles sont plausibles
         banniere = txt("banniere")
         stations.append([
             stable_id(banniere, txt("adresse"), lat, lng, seen),
             txt("nom"), banniere, txt("adresse"), txt("region"), txt("cp"),
             lat, lng, prix(g("regulier")), prix(g("super")), prix(g("diesel")),
-            rive(lat, lng),
+            rive(lat, lng) if coord_valide(lat, lng) else None,
         ])
     return stations
 

@@ -1,0 +1,19 @@
+{
+  "name": "econo-gaz",
+  "private": true,
+  "description": "Écono Gaz — prix de l'essence au Québec. Construit automatiquement par .github/workflows/construire.yml",
+  "type": "module",
+  "scripts": {
+    "test": "python3 tests/gen_data.py > tests/stations-test.json && node tests/test_trajet_unit.mjs",
+    "build": "python3 src/build.py ."
+  },
+  "dependencies": {
+    "leaflet": "1.9.4",
+    "leaflet.markercluster": "1.5.3",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  }
+}

@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   maj:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04   # version figée : ubuntu-latest passe à Ubuntu 26 le 19 octobre 2026
     timeout-minutes: 10
     steps:
       # Actions épinglées sur une version précise (empreinte du commit) : protège contre une version piratée
@@ -44,4 +44,10 @@ jobs:
             exit 0
           fi
           git commit -m "Prix du $(python -c "import json;print(json.load(open('stations.json'))['ts'])")"
-          git push
+          # Si un fichier a été téléversé à la main pendant l'exécution, on se remet à jour avant d'envoyer
+          for essai in 1 2 3; do
+            git pull --rebase --quiet origin main && git push && exit 0
+            echo "Envoi refusé, nouvel essai dans 5 s…"
+            sleep 5
+          done
+          exit 1

@@ -1,0 +1,73 @@
+name: Construire l'app
+
+# Se lance quand le code de l'app change (dossier src/, tests/ ou liste des outils),
+# ou à la main avec le bouton « Run workflow ».
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/construire.yml"
+  workflow_dispatch:
+
+# Droits minimaux : le robot peut seulement modifier le contenu de ce dépôt
+permissions:
+  contents: write
+
+# Une seule construction à la fois ; une nouvelle attend la fin de la précédente
+concurrency:
+  group: construire-app
+  cancel-in-progress: false
+
+jobs:
+  construire:
+    runs-on: ubuntu-24.04   # Node.js et Python 3 sont déjà installés sur cette image
+    timeout-minutes: 10
+    steps:
+      # Même version épinglée que le robot des prix
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09   # v5.1.0
+        with:
+          persist-credentials: true
+
+      - name: Versions des outils
+        run: |
+          node --version
+          python3 --version
+
+      # Versions exactes de package-lock.json ; aucun script d'installation exécuté
+      - name: Installer les outils de construction
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      # Si un test échoue, on s'arrête ici : le site en ligne ne change pas
+      - name: Tests des calculs (Trajet)
+        run: npm test
+
+      - name: Construire index.html
+        run: python3 src/build.py .
+
+      - name: Vérifier le fichier construit
+        run: |
+          test "$(stat -c%s index.html)" -gt 200000 || { echo "index.html anormalement petit"; exit 1; }
+          grep -q 'Content-Security-Policy' index.html || { echo "Politique de sécurité absente"; exit 1; }
+          grep -q 'routing.openstreetmap.de' index.html || { echo "Fichier incomplet"; exit 1; }
+
+      - name: Publier index.html
+        run: |
+          git config user.name "construire-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          if git diff --cached --quiet; then
+            echo "index.html est déjà à jour."
+            exit 0
+          fi
+          git commit -m "Construction automatique de l'app ($(git rev-parse --short HEAD))"
+          # Le robot des prix peut publier en même temps : on se remet à jour avant d'envoyer
+          for essai in 1 2 3; do
+            git pull --rebase --quiet origin main && git push && exit 0
+            echo "Envoi refusé, nouvel essai dans 5 s…"
+            sleep 5
+          done
+          exit 1

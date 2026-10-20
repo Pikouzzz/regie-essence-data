@@ -13,7 +13,7 @@ const CARBURANTS = [
 ];
 const RAYONS = [5, 10, 25, 50, 100];
 const APP_NAME = "Écono Gaz";
-const APP_VERSION = "12.5";
+const APP_VERSION = "12.6";
 const CONTACT_EMAIL = "econogaz.app@gmail.com";
 const SOURCE_NOM = "Régie essence Québec, Régie de l'énergie"; // mention exigée par la Régie (courriel du 2026-10-06)
 // config.json (modifiable sur GitHub sans reconstruire l'app) : lien de don, compteur de visites
@@ -282,7 +282,7 @@ function GpsAide({ err, onRetry, onClose }) {
 }
 
 // ── Carte de station (liste et favoris) ───────────────────────
-function StationCard({ s, carb, range, best, bestLabel="Le moins cher", showDist, showRegion, fav, onToggleFav, onSelect, onCarte, navApp, trajetInfo, extra }) {
+function StationCard({ s, carb, range, best, bestLabel="Le moins cher", showDist, showRegion, fav, onToggleFav, onSelect, onCarte, navApp, trajetInfo, extra, autresCarb=true }) {
   const cInfo = CARBURANTS.find(c=>c.key===carb);
   const p = s[carb];
   const pColor = priceColor(p, range);
@@ -300,7 +300,7 @@ function StationCard({ s, carb, range, best, bestLabel="Le moins cher", showDist
         <div style={{display:"flex",gap:10,marginTop:4,alignItems:"center",flexWrap:"wrap"}}>
           {showDist&&s.dist!=null && <span style={{fontSize:11,color:"var(--accent)",fontWeight:600}}>{"📍"} ≈{NBSP}{fmtDist(s.dist)}{s.pont?" (pont)":""}</span>}
           {trajetInfo && <span style={{fontSize:11,color:"var(--accent)",fontWeight:600}}>{trajetInfo}</span>}
-          {CARBURANTS.filter(c=>c.key!==carb).map(c=>(
+          {autresCarb && CARBURANTS.filter(c=>c.key!==carb).map(c=>(
             <span key={c.key} style={{fontSize:11,color:"var(--t3)"}}>{c.label} {s[c.key]!=null?fmt(s[c.key]):"non offert"}</span>
           ))}
           {showRegion && <span style={{fontSize:11,color:"var(--t3)"}}>{s.region}</span>}
@@ -576,9 +576,9 @@ function StationSheet({ station, carb, gps, priceRange, onClose, onVoirCarte, fa
           )}
           {eco!=null && (
             <div style={{marginTop:10,fontSize:12,fontWeight:600,color:eco>0.05?TIER_COLOR.low:"var(--t3)"}}>
-              {eco>0.05 ? "Un plein de "+plein+" L te coûte ≈ "+fmtArgent(eco)+" de moins que la moyenne des stations affichées"
-               : eco<-0.05 ? "Un plein de "+plein+" L te coûte ≈ "+fmtArgent(eco)+" de plus que la moyenne des stations affichées"
-               : "Prix dans la moyenne des stations affichées"}
+              {eco>0.05 ? "Tu économises ≈ "+fmtArgent(eco)+" sur ton plein de "+plein+" L par rapport à la moyenne des stations affichées."
+               : eco<-0.05 ? "Tu paies ≈ "+fmtArgent(eco)+" de plus sur ton plein de "+plein+" L que la moyenne des stations affichées."
+               : "Prix dans la moyenne des stations affichées."}
             </div>
           )}
           {gps&&station.dist!=null && (
@@ -1016,13 +1016,13 @@ function TrajetVue({ villes, trajet, setTrajet, resultat, calcul, onCalculer, ca
 
           {best && (
             <div style={{marginTop:12}}>
-              <StationCard s={best} carb={carb} range={range} best bestLabel="Meilleur choix sur ton trajet" trajetInfo={info(best)}
+              <StationCard s={best} carb={carb} range={range} best bestLabel="Meilleur choix sur ton trajet" trajetInfo={info(best)} autresCarb={false}
                 fav={favs.has(best.id)} onToggleFav={toggleFav} onSelect={onSelect} navApp={navApp}
                 onCarte={st=>{ setCarteFocus(st); setMode("carte"); }}
                 extra={eco!=null && Math.abs(eco)>=0.05 && (
                   <div style={{fontSize:12,fontWeight:600,marginTop:6,color:eco>0?TIER_COLOR.low:"var(--t3)"}}>
-                    {eco>0 ? "Plein de "+reglages.plein+" L : ≈ "+fmtArgent(eco)+" de moins que la moyenne du trajet, détour compris"
-                           : "Prix proche de la moyenne du trajet"}
+                    {eco>0 ? "Tu économises ≈ "+fmtArgent(eco)+" sur ton plein de "+reglages.plein+" L, même en comptant le détour."
+                           : "Prix proche de la moyenne du trajet."}
                   </div>
                 )} />
               {moinsCher && moinsCher.id!==best.id && (
@@ -1059,7 +1059,7 @@ function TrajetVue({ villes, trajet, setTrajet, resultat, calcul, onCalculer, ca
             <>
               {tries.slice(0,nb).map(s=>(
                 <div key={s.id} style={{opacity: atteignable(s) ? 1 : 0.45}}>
-                  <StationCard s={s} carb={carb} range={range} trajetInfo={info(s)}
+                  <StationCard s={s} carb={carb} range={range} trajetInfo={info(s)} autresCarb={false}
                     fav={favs.has(s.id)} onToggleFav={toggleFav} onSelect={onSelect} navApp={navApp}
                     onCarte={st=>{ setCarteFocus(st); setMode("carte"); }} />
                 </div>
@@ -1148,6 +1148,9 @@ export default function App() {
   const [epinglee, setEpinglee]     = useState(null); // station ajoutée à la carte si elle est hors de la zone
   const voirSurCarte = useCallback(st=>{ setCarteFocus(st); setEpinglee(st); setVue("carte"); },[]);
   useEffect(()=>{ if (vue!=="carte") setEpinglee(null); },[vue]);
+  // Chaque changement d'onglet repart du haut de l'écran
+  const premiereVue = useRef(true);
+  useEffect(()=>{ if (premiereVue.current) { premiereVue.current=false; return; } window.scrollTo(0,0); },[vue]);
   const [gps, setGps]               = useState(null);
   const [gpsErr, setGpsErr]         = useState(null);
   const [gpsLoading, setGpsLoading] = useState(false);

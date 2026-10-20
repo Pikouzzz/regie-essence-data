@@ -13,7 +13,7 @@ const CARBURANTS = [
 ];
 const RAYONS = [5, 10, 25, 50, 100];
 const APP_NAME = "Écono Gaz";
-const APP_VERSION = "12.3";
+const APP_VERSION = "12.5";
 const CONTACT_EMAIL = "econogaz.app@gmail.com";
 const SOURCE_NOM = "Régie essence Québec, Régie de l'énergie"; // mention exigée par la Régie (courriel du 2026-10-06)
 // config.json (modifiable sur GitHub sans reconstruire l'app) : lien de don, compteur de visites
@@ -335,16 +335,35 @@ function Choix({ options, value, onChange, label }) {
         <button key={String(v)} role="radio" aria-checked={value===v} className="tab" onClick={()=>onChange(v)}
           style={{flex:"1 1 0",minWidth:64,padding:"9px 6px",borderRadius:10,fontSize:13,fontWeight:600,
             background:value===v?"var(--accent)":"rgba(var(--ov),0.06)",color:value===v?ON_COLOR:"var(--t2)",
-            border:value===v?"1px solid var(--accent)":"1px solid rgba(var(--ov),0.1)"}}>{value===v?"✓ ":""}{l}</button>
+            border:value===v?"1px solid var(--accent)":"1px solid rgba(var(--ov),0.1)",whiteSpace:"nowrap"}}>{value===v&&options.length<=4?"✓ ":""}{l}</button>
       ))}
     </div>
   );
 }
-function Ligne({ titre, aide, children }) {
+// Petit bouton ⓘ : affiche ou cache une explication détaillée
+function useInfo() { const [ouvert, setOuvert] = useState(false); return [ouvert, ()=>setOuvert(o=>!o)]; }
+function BoutonInfo({ ouvert, basculer, sujet }) {
+  return (
+    <button type="button" onClick={basculer} aria-expanded={ouvert} aria-label={(ouvert?"Masquer":"Afficher")+" l'explication"+(sujet?" : "+sujet:"")}
+      style={{flexShrink:0,width:30,height:30,margin:"-6px -4px -6px 0",border:"none",background:"none",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",padding:0}}>
+      <span aria-hidden="true" style={{width:18,height:18,borderRadius:"50%",border:"1.5px solid "+(ouvert?"var(--accent)":"var(--t3)"),color:ouvert?"var(--accent)":"var(--t3)",fontSize:11,fontWeight:700,fontStyle:"italic",fontFamily:"Georgia,serif",display:"inline-flex",alignItems:"center",justifyContent:"center",background:ouvert?"rgba(34,197,94,0.12)":"none"}}>i</span>
+    </button>
+  );
+}
+function TexteInfo({ ouvert, children }) {
+  return ouvert ? <div style={{fontSize:12,color:"var(--t2)",marginTop:6,lineHeight:1.45,padding:"8px 10px",borderRadius:8,background:"rgba(var(--ov),0.05)"}}>{children}</div> : null;
+}
+// Ligne de réglage : titre, note courte toujours visible (facultative), explication détaillée derrière ⓘ
+function Ligne({ titre, note, aide, children }) {
+  const [ouvert, basculer] = useInfo();
   return (
     <div style={{padding:"14px 0",borderBottom:"1px solid rgba(var(--ov),0.06)"}}>
-      <div style={{fontSize:14,fontWeight:600,color:"var(--t1)"}}>{titre}</div>
-      {aide && <div style={{fontSize:12,color:"var(--t3)",marginTop:2,lineHeight:1.4}}>{aide}</div>}
+      <div style={{display:"flex",alignItems:"center",gap:6}}>
+        <div style={{fontSize:14,fontWeight:600,color:"var(--t1)"}}>{titre}</div>
+        {aide && <BoutonInfo ouvert={ouvert} basculer={basculer} sujet={titre} />}
+      </div>
+      {note && <div style={{fontSize:12,color:"var(--t3)",marginTop:2,lineHeight:1.4}}>{note}</div>}
+      <TexteInfo ouvert={ouvert}>{aide}</TexteInfo>
       <div style={{marginTop:10}}>{children}</div>
     </div>
   );
@@ -378,50 +397,50 @@ function Section({ titre, children }) {
 }
 function Reglages({ reglages:r, maj, nbFavs, onEffacerFavs, onReinitialiser, dataTs, nbStations, donUrl, statsDispo }) {
   const navDefaut = IS_IOS ? "apple" : "google";
-  const exemple = r.conso*10/100*190/100; // 5 km aller-retour à 190 ¢/L
+  const exemple = r.conso*10/100*190/100; // station à 5 km : 10 km aller-retour à 190 ¢/L
   return (
     <div style={{padding:"16px 20px 24px"}}>
       <h1 style={{fontSize:22,fontWeight:700,margin:"0 0 4px"}}>Réglages</h1>
-      <div style={{fontSize:12,color:"var(--t3)",marginBottom:8}}>Enregistrés automatiquement sur cet appareil.</div>
+      <div style={{fontSize:12,color:"var(--t3)",marginBottom:8}}>Enregistrés automatiquement sur cet appareil. Touche <b>ⓘ</b> pour plus d'explications.</div>
 
       <Section titre="À l'ouverture de l'app">
-        <Ligne titre="Carburant affiché">
-          <Choix label="Carburant affiché" value={r.carbDefaut} onChange={v=>maj("carbDefaut",v)} options={CARBURANTS.map(c=>[c.key,c.label])} />
+        <Ligne titre="Carburant habituel" aide="Le carburant affiché quand tu ouvres l'app. Trajet l'utilise aussi par défaut.">
+          <Choix label="Carburant habituel" value={r.carbDefaut} onChange={v=>maj("carbDefaut",v)} options={CARBURANTS.map(c=>[c.key,c.label])} />
         </Ligne>
-        <Ligne titre="Écran d'accueil" aide="L'écran qui s'affiche quand tu ouvres l'app.">
-          <Choix label="Écran d'accueil" value={r.vueDefaut} onChange={v=>maj("vueDefaut",v)} options={VUES.map(v=>[v.key,v.label])} />
+        <Ligne titre="Onglet à l'ouverture" aide="L'onglet affiché quand tu ouvres l'app : Stations, Trajet, Favoris ou Carte.">
+          <Choix label="Onglet à l'ouverture" value={r.vueDefaut} onChange={v=>maj("vueDefaut",v)} options={VUES.map(v=>[v.key,v.label])} />
         </Ligne>
-        <Ligne titre="Me localiser automatiquement" aide="Affiche directement les stations autour de toi, si tu as déjà autorisé la localisation.">
+        <Ligne titre="Me localiser automatiquement" aide="À l'ouverture, l'app te localise et affiche les stations autour de toi. Ça ne fonctionne que si tu as déjà autorisé la localisation une première fois avec « Me localiser ».">
           <Choix label="Me localiser automatiquement" value={r.autoGps} onChange={v=>maj("autoGps",v)} options={[[true,"Oui"],[false,"Non"]]} />
         </Ligne>
-        <Ligne titre="Distance de recherche" aide="Jusqu'où chercher autour de toi.">
-          <Choix label="Distance de recherche" value={r.rayonDefaut} onChange={v=>maj("rayonDefaut",v)} options={RAYONS.map(k=>[k,k+" km"])} />
+        <Ligne titre="Rayon autour de toi" aide="Quand tu touches « Me localiser », l'app affiche les stations à moins de cette distance (en voiture). Tu peux aussi le changer sous l'en-tête.">
+          <Choix label="Rayon autour de toi" value={r.rayonDefaut} onChange={v=>maj("rayonDefaut",v)} options={RAYONS.map(k=>[k,k+" km"])} />
         </Ligne>
       </Section>
 
       <Section titre="Affichage">
-        <Ligne titre="Thème" aide="« Automatique » suit le réglage de ton téléphone. Le thème clair se lit mieux en plein soleil.">
+        <Ligne titre="Thème" aide="« Automatique » suit le réglage clair ou sombre de ton téléphone. Le thème clair se lit mieux en plein soleil.">
           <Choix label="Thème" value={r.theme} onChange={v=>maj("theme",v)} options={[["auto","Automatique"],["clair","Clair"],["sombre","Sombre"]]} />
         </Ligne>
       </Section>
 
       <Section titre="Costco">
-        <Ligne titre="Je suis membre Costco" aide="Oui : les stations Costco (réservées aux membres) sont affichées. Non : elles sont cachées partout (liste, carte, Trajet) et ne comptent pas dans les moyennes.">
+        <Ligne titre="Je suis membre Costco" note="Non : les stations Costco sont cachées." aide="Les stations Costco sont réservées aux membres (carte exigée à la pompe). Oui : elles sont affichées. Non : elles sont cachées partout (liste, carte, Trajet) et ne comptent pas dans les moyennes.">
           <Choix label="Je suis membre Costco" value={r.costcoMembre} onChange={v=>maj("costcoMembre",v)} options={[[true,"Oui"],[false,"Non"]]} />
         </Ligne>
       </Section>
 
       <Section titre="Trajet">
-        <Ligne titre="App de navigation" aide="Utilisée quand tu touches « Itinéraire ».">
+        <Ligne titre="App de navigation" aide="L'app ouverte quand tu touches « Itinéraire » sur une station.">
           <Choix label="App de navigation" value={r.navApp||navDefaut} onChange={v=>maj("navApp",v)} options={NAV_APPS.map(a=>[a.key,a.label])} />
         </Ligne>
       </Section>
 
       <Section titre="Mon véhicule">
-        <Ligne titre="Taille d'un plein" aide="Sert à calculer combien tu économises sur un plein.">
+        <Ligne titre="Taille d'un plein" aide="Le nombre de litres que tu mets d'habitude quand tu fais le plein. Sert à calculer combien tu économises. Une estimation suffit.">
           <Nombre label="la taille du plein" value={r.plein} onChange={v=>maj("plein",v)} min={10} max={200} step={5} unite="litres" />
         </Ligne>
-        <Ligne titre="Consommation" aide={"Sert à estimer le coût du trajet jusqu'à la station. Ex. : 5 km aller-retour ≈ "+fmtArgent(exemple)+"."}>
+        <Ligne titre="Consommation" aide={"Ce que ton auto consomme (indiqué au tableau de bord ou dans le manuel). Sert à estimer ce que coûte en essence l'aller-retour jusqu'à une station. Exemple : une station à 5 km (10 km aller-retour) ≈ "+fmtArgent(exemple)+" d'essence."}>
           <Nombre label="la consommation" value={r.conso} onChange={v=>maj("conso",v)} min={2} max={30} step={0.5} unite="L / 100 km" />
         </Ligne>
       </Section>
@@ -458,7 +477,7 @@ function Reglages({ reglages:r, maj, nbFavs, onEffacerFavs, onReinitialiser, dat
 
       {statsDispo && (
         <Section titre="Statistiques">
-          <Ligne titre="Compter ma visite (anonyme)" aide="Nous aide à savoir combien de personnes utilisent l'app. Aucun témoin, aucune donnée personnelle conservée.">
+          <Ligne titre="Compter ma visite (anonyme)" aide="Nous aide à savoir combien de personnes utilisent l'app. Aucun témoin (cookie), aucune donnée personnelle conservée. Désactivé aussi si ton navigateur demande « Ne pas me suivre ».">
             <Choix label="Compter ma visite" value={r.stats} onChange={v=>maj("stats",v)} options={[[true,"Oui"],[false,"Non"]]} />
           </Ligne>
         </Section>
@@ -557,9 +576,9 @@ function StationSheet({ station, carb, gps, priceRange, onClose, onVoirCarte, fa
           )}
           {eco!=null && (
             <div style={{marginTop:10,fontSize:12,fontWeight:600,color:eco>0.05?TIER_COLOR.low:"var(--t3)"}}>
-              {eco>0.05 ? "Un plein de "+plein+" L te coûte "+fmtArgent(eco)+" de moins qu'ailleurs dans le secteur (en moyenne)"
-               : eco<-0.05 ? "Un plein de "+plein+" L te coûte "+fmtArgent(eco)+" de plus qu'ailleurs dans le secteur (en moyenne)"
-               : "Prix dans la moyenne du secteur"}
+              {eco>0.05 ? "Un plein de "+plein+" L te coûte ≈ "+fmtArgent(eco)+" de moins que la moyenne des stations affichées"
+               : eco<-0.05 ? "Un plein de "+plein+" L te coûte ≈ "+fmtArgent(eco)+" de plus que la moyenne des stations affichées"
+               : "Prix dans la moyenne des stations affichées"}
             </div>
           )}
           {gps&&station.dist!=null && (
@@ -879,6 +898,9 @@ function TrajetVue({ villes, trajet, setTrajet, resultat, calcul, onCalculer, ca
   const [nb, setNb]       = useState(PAS_TRAJET);
   const [posEnCours, setPosEnCours] = useState(false);
   const [posErr, setPosErr] = useState(null);
+  const [infoAut, basculerAut] = useInfo();
+  const [infoEcart, basculerEcart] = useInfo();
+  const [infoOsrm, basculerOsrm] = useInfo();
   useEffect(()=>{ setNb(PAS_TRAJET); },[resultat, carb, ordre, reglages.detourMax]);
   useEffect(()=>{ if (carteFocus) setMode("carte"); },[carteFocus]); // « Voir sur la carte » depuis le panneau
   const carteRef = useRef(null);
@@ -929,20 +951,27 @@ function TrajetVue({ villes, trajet, setTrajet, resultat, calcul, onCalculer, ca
         </div>
         <VilleChamp id="trajet-arr" label="Arrivée" valeur={arr} villes={villes} onChoix={v=>setTrajet(t=>({...t, arr:v}))} />
         <div>
-          <label htmlFor="trajet-autonomie" style={{fontSize:11,color:"var(--t3)",fontWeight:600}}>Autonomie restante (facultatif)</label>
+          <div style={{display:"flex",alignItems:"center",gap:6}}>
+            <label htmlFor="trajet-autonomie" style={{fontSize:11,color:"var(--t3)",fontWeight:600}}>Autonomie restante (facultatif)</label>
+            <BoutonInfo ouvert={infoAut} basculer={basculerAut} sujet="autonomie" />
+          </div>
           <div style={{display:"flex",alignItems:"center",gap:8,marginTop:4}}>
             <input id="trajet-autonomie" inputMode="numeric" placeholder="ex. 120" value={trajet.autonomie ?? ""}
               onChange={e=>{ const n = parseInt(e.target.value.replace(/\D/g,""),10); setTrajet(t=>({...t, autonomie: n>0 ? Math.min(n,2000) : null})); }}
               style={{width:110,background:"rgba(var(--ov),0.06)",border:"1px solid rgba(var(--ov),0.1)",borderRadius:12,padding:"10px 12px",color:"var(--t1)",fontSize:16,fontFamily:POLICE_MONO,outline:"none"}} />
             <span style={{fontSize:13,color:"var(--t3)"}}>km avant la panne sèche</span>
           </div>
-          <div style={{fontSize:11,color:"var(--t3)",marginTop:4}}>Lis-la au tableau de bord : seules les stations à ta portée sont proposées.</div>
+          <TexteInfo ouvert={infoAut}>Le nombre de kilomètres que tu peux encore rouler, affiché au tableau de bord. Si tu l'indiques, seules les stations que tu peux atteindre sont proposées, et la carte montre où tu tomberais à sec (⛽). Laisse vide si ton réservoir est plein.</TexteInfo>
         </div>
         <div>
-          <div style={{fontSize:11,color:"var(--t3)",fontWeight:600,marginBottom:4}}>Écart maximal de la route</div>
-          <div role="radiogroup" aria-label="Écart maximal de la route" style={{display:"flex",gap:6}}>
+          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
+            <div style={{fontSize:11,color:"var(--t3)",fontWeight:600}}>Stations à moins de… de la route</div>
+            <BoutonInfo ouvert={infoEcart} basculer={basculerEcart} sujet="distance de la route" />
+          </div>
+          <TexteInfo ouvert={infoEcart}>Seules les stations situées à moins de 1, 3 ou 5 km de ton itinéraire sont proposées. Pour chacune, le « détour » est l'aller-retour estimé entre la route et la station. Plus l'écart est grand, plus il y a de choix, mais plus les détours sont longs.</TexteInfo>
+          <div role="radiogroup" aria-label="Stations à moins de… de la route" style={{display:"flex",gap:6,marginTop:4}}>
             {DETOURS.map(d=>(
-              <button key={d} role="radio" aria-checked={reglages.detourMax===d} className="tab" onClick={()=>majReglage("detourMax",d)} style={btnMini(reglages.detourMax===d)}>{d}{NBSP}km</button>
+              <button key={d} role="radio" aria-checked={reglages.detourMax===d} className="tab" onClick={()=>majReglage("detourMax",d)} style={btnMini(reglages.detourMax===d)}>{reglages.detourMax===d?"✓ ":""}{d}{NBSP}km</button>
             ))}
           </div>
         </div>
@@ -951,9 +980,11 @@ function TrajetVue({ villes, trajet, setTrajet, resultat, calcul, onCalculer, ca
           {calcul.enCours ? <><span className="pulse">⟳</span> Calcul de l'itinéraire…</> : "Trouver les stations"}
         </button>
         {dep && arr && !pret && <div style={{fontSize:12,color:"var(--warn-t)"}}>Choisis deux endroits différents.</div>}
-        <div style={{fontSize:11,color:"var(--t3)",lineHeight:1.5}}>
-          Le départ (arrondi à ~1 km) et l'arrivée sont envoyés au service d'itinéraire OSRM.
+        <div style={{display:"flex",alignItems:"center",gap:6,fontSize:11,color:"var(--t3)"}}>
+          <span>Itinéraire calculé par OSRM (OpenStreetMap)</span>
+          <BoutonInfo ouvert={infoOsrm} basculer={basculerOsrm} sujet="confidentialité de l'itinéraire" />
         </div>
+        <TexteInfo ouvert={infoOsrm}>Pour tracer la route, ton départ (arrondi à environ 1 km si c'est ta position) et ton arrivée sont envoyés au service d'itinéraire OSRM, seulement quand tu touches « Trouver les stations ». Rien n'est envoyé pendant que tu tapes : les villes sont proposées à partir de la liste des stations.</TexteInfo>
       </div>
 
       {resultat && (
@@ -971,7 +1002,7 @@ function TrajetVue({ villes, trajet, setTrajet, resultat, calcul, onCalculer, ca
             return (
               <div role="status" style={{marginTop:8,padding:"8px 12px",borderRadius:10,background:couleur[0],border:"1px solid "+couleur[1],fontSize:12,color:couleur[2],lineHeight:1.5}}>
                 {ok ? <>Avec ≈ {aut}{NBSP}km d'autonomie, tu peux faire tout le trajet ({Math.round(resultat.km)}{NBSP}km) sans t'arrêter.</>
-                 : aucune ? <>⚠️ Avec ≈ {aut}{NBSP}km d'autonomie, aucune station du trajet n'est à ta portée{reglages.detourMax<DETOURS[DETOURS.length-1]?" à moins de "+reglages.detourMax+" km de la route":""}. Fais le plein avant de partir{reglages.detourMax<DETOURS[DETOURS.length-1]?" ou augmente l'écart maximal":""}.</>
+                 : aucune ? <>⚠️ Avec ≈ {aut}{NBSP}km d'autonomie, aucune station du trajet n'est à ta portée{reglages.detourMax<DETOURS[DETOURS.length-1]?" à moins de "+reglages.detourMax+" km de la route":""}. Fais le plein avant de partir{reglages.detourMax<DETOURS[DETOURS.length-1]?" ou choisis une plus grande distance de la route":""}.</>
                  : <>⚠️ Avec ≈ {aut}{NBSP}km d'autonomie, fais le plein avant le km {Math.max(0,Math.floor(aut))} : {nbAtteignables} station{nbAtteignables>1?"s":""} à ta portée.</>}
                 {!ok && <> Garde une marge : l'autonomie affichée par l'auto est une estimation.</>}
               </div>
@@ -1012,12 +1043,12 @@ function TrajetVue({ villes, trajet, setTrajet, resultat, calcul, onCalculer, ca
           {avecPrix.length===0 && (
             <div style={{textAlign:"center",padding:"30px 10px",color:"var(--t3)",fontSize:14}}>
               Aucune station avec {cInfo.label.toLowerCase()} à moins de {reglages.detourMax}{NBSP}km de la route.
-              {reglages.detourMax<DETOURS[DETOURS.length-1] && <> Essaie un écart plus grand.</>}
+              {reglages.detourMax<DETOURS[DETOURS.length-1] && <> Choisis une plus grande distance de la route.</>}
             </div>
           )}
           {avecPrix.length>0 && (range?.n??0)<MIN_COMPARAISON && (
             <div style={{fontSize:12,color:"var(--t3)",marginBottom:10,padding:"8px 12px",borderRadius:10,background:"rgba(var(--ov),0.04)"}}>
-              Trop peu de stations pour colorer les prix : augmente l'écart maximal.
+              Trop peu de stations pour comparer les prix : choisis une plus grande distance de la route.
             </div>
           )}
 
@@ -1059,21 +1090,21 @@ function Accueil({ reglages:r, maj, onFin }) {
       <div style={{maxWidth:480,margin:"0 auto",padding:"calc(env(safe-area-inset-top) + 20px) 20px calc(env(safe-area-inset-bottom) + 24px)",color:"var(--t1)",fontFamily:POLICE}}>
         <div style={{fontSize:36}}>⛽</div>
         <h1 id="accueil-titre" style={{fontSize:24,fontWeight:700,margin:"6px 0 4px"}}>Bienvenue sur {APP_NAME}</h1>
-        <div style={{fontSize:14,color:"var(--t2)",lineHeight:1.5}}>Quatre petites questions pour adapter l'app à ton auto. Tu pourras tout changer plus tard dans Réglages.</div>
+        <div style={{fontSize:14,color:"var(--t2)",lineHeight:1.5}}>Quatre questions rapides pour adapter l'app à ton auto. Tu pourras tout changer plus tard dans Réglages.</div>
 
-        <Ligne titre="1. Ton carburant habituel" aide="Affiché par défaut dans la liste, la carte et Trajet.">
+        <Ligne titre="1. Ton carburant habituel" aide="Affiché par défaut dans la liste, la carte et Trajet. Tu peux toujours en changer en haut de l'écran.">
           <Choix label="Carburant habituel" value={r.carbDefaut} onChange={v=>maj("carbDefaut",v)} options={CARBURANTS.map(c=>[c.key,c.label])} />
         </Ligne>
-        <Ligne titre="2. Ton véhicule" aide="Sert à calculer l'économie sur un plein et le coût des détours. Approximatif, c'est correct.">
+        <Ligne titre="2. Ton véhicule" note="Une estimation suffit." aide="La taille du plein sert à calculer combien tu économises sur un plein. La consommation sert à estimer ce que coûte un détour pour aller à une station. Pas besoin d'être exact.">
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
             <Nombre label="la taille du plein" value={r.plein} onChange={v=>maj("plein",v)} min={10} max={200} step={5} unite="litres par plein" />
             <Nombre label="la consommation" value={r.conso} onChange={v=>maj("conso",v)} min={2} max={30} step={0.5} unite="L / 100 km" />
           </div>
         </Ligne>
-        <Ligne titre="3. Es-tu membre Costco ?" aide="Oui : les stations Costco (réservées aux membres) s'affichent. Non : elles sont cachées partout dans l'app.">
+        <Ligne titre="3. Es-tu membre Costco ?" note="Non : les stations Costco seront cachées." aide="Les stations Costco sont réservées aux membres. Oui : elles s'affichent. Non : elles sont cachées partout dans l'app. Modifiable dans Réglages.">
           <Choix label="Membre Costco" value={r.costcoMembre} onChange={v=>maj("costcoMembre",v)} options={[[true,"Oui"],[false,"Non"]]} />
         </Ligne>
-        <Ligne titre="4. Ton app de navigation" aide="Ouverte quand tu touches « Itinéraire ».">
+        <Ligne titre="4. Ton app de navigation" aide="L'app ouverte quand tu touches « Itinéraire » sur une station.">
           <Choix label="App de navigation" value={r.navApp||navDefaut} onChange={v=>maj("navApp",v)} options={NAV_APPS.map(a=>[a.key,a.label])} />
         </Ligne>
 

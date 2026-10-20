@@ -13,7 +13,7 @@ const CARBURANTS = [
 ];
 const RAYONS = [5, 10, 25, 50, 100];
 const APP_NAME = "Écono Gaz";
-const APP_VERSION = "12.2";
+const APP_VERSION = "12.3";
 const CONTACT_EMAIL = "econogaz.app@gmail.com";
 const SOURCE_NOM = "Régie essence Québec, Régie de l'énergie"; // mention exigée par la Régie (courriel du 2026-10-06)
 // config.json (modifiable sur GitHub sans reconstruire l'app) : lien de don, compteur de visites
@@ -35,7 +35,6 @@ const POLICE_MONO = "ui-monospace,SFMono-Regular,Menlo,Consolas,monospace";
 const VUES = [
   { key:"liste",   label:"Stations", icon:"☰" },
   { key:"trajet",  label:"Trajet",   icon:"↝" },
-  { key:"top5",    label:"Top 5",    icon:"★" },
   { key:"favoris", label:"Favoris",  icon:"♥" },
   { key:"carte",   label:"Carte",    icon:"⊙" },
 ];
@@ -183,7 +182,7 @@ const REGLAGES_DEFAUT = {
   theme: "auto",         // auto | clair | sombre
   stats: true,           // compteur de visites anonyme
   detourMax: 3,          // Trajet : écart maximal à la route (km)
-  costcoMembre: false,   // non membre : Costco exclu des classements (« le moins cher », Top 5, meilleur choix, moyennes)
+  costcoMembre: false,   // non membre : stations Costco cachées (liste, carte, Trajet, moyennes)
 };
 function reglagesInitiaux() {
   const r = { ...REGLAGES_DEFAUT, ...(PREFS.reglages||{}) };
@@ -336,7 +335,7 @@ function Choix({ options, value, onChange, label }) {
         <button key={String(v)} role="radio" aria-checked={value===v} className="tab" onClick={()=>onChange(v)}
           style={{flex:"1 1 0",minWidth:64,padding:"9px 6px",borderRadius:10,fontSize:13,fontWeight:600,
             background:value===v?"var(--accent)":"rgba(var(--ov),0.06)",color:value===v?ON_COLOR:"var(--t2)",
-            border:value===v?"1px solid #22c55e":"1px solid rgba(var(--ov),0.1)"}}>{l}</button>
+            border:value===v?"1px solid var(--accent)":"1px solid rgba(var(--ov),0.1)"}}>{value===v?"✓ ":""}{l}</button>
       ))}
     </div>
   );
@@ -407,7 +406,7 @@ function Reglages({ reglages:r, maj, nbFavs, onEffacerFavs, onReinitialiser, dat
       </Section>
 
       <Section titre="Costco">
-        <Ligne titre="Je suis membre Costco" aide="Si tu n'es pas membre, les stations Costco restent dans la liste et sur la carte, mais ne comptent pas dans « le moins cher », le Top 5, le meilleur choix ni les moyennes.">
+        <Ligne titre="Je suis membre Costco" aide="Oui : les stations Costco (réservées aux membres) sont affichées. Non : elles sont cachées partout (liste, carte, Trajet) et ne comptent pas dans les moyennes.">
           <Choix label="Je suis membre Costco" value={r.costcoMembre} onChange={v=>maj("costcoMembre",v)} options={[[true,"Oui"],[false,"Non"]]} />
         </Ligne>
       </Section>
@@ -808,15 +807,12 @@ function CarteView({ stations, carb, gps, minP, maxP, priceRange, onSelectStatio
   useEffect(()=>{ leafletRef.current?.invalidateSize(); },[h]);
 
   return (
-    <div ref={boxRef} style={{position:"relative",height:h}}>
+    <div ref={boxRef} style={{position:"relative",height:h,zIndex:0,isolation:"isolate"}}>
       <div ref={mapRef} style={{width:"100%",height:"100%"}} />
       {/* Légende */}
-      <div style={compact
-          ? {position:"absolute",top:10,right:10,zIndex:1000,background:"var(--panel-bg)",borderRadius:10,padding:"5px 8px",border:"1px solid rgba(var(--ov),0.08)",display:"flex",gap:8}
-          : {position:"absolute",bottom:16,left:12,zIndex:1000,background:"var(--panel-bg)",borderRadius:12,padding:"8px 12px",border:"1px solid rgba(var(--ov),0.08)"}}>
-        {!compact && <div style={{fontSize:11,color:"var(--t3)",textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>Prix</div>}
-        {(compact ? [["var(--accent)","Bas"],["var(--mid)","Moyen"],["var(--high)","Élevé"]] : [["var(--accent)","Bas prix"],["var(--mid)","Moyen"],["var(--high)","Élevé"],["var(--t3)","Pas de comparaison"]]).map(([col,label])=>(
-          <div key={label} style={{display:"flex",alignItems:"center",gap:compact?4:6,marginBottom:compact?0:3}}>
+      <div aria-label="Légende des prix" style={{position:"absolute",top:10,right:10,zIndex:1000,background:"var(--panel-bg)",borderRadius:10,padding:"4px 8px",border:"1px solid rgba(var(--ov),0.08)",display:"flex",gap:8,pointerEvents:"none"}}>
+        {[["var(--accent)","Bas"],["var(--mid)","Moyen"],["var(--high)","Élevé"]].map(([col,label])=>(
+          <div key={label} style={{display:"flex",alignItems:"center",gap:4}}>
             <div style={{width:10,height:10,borderRadius:"50%",background:col,flexShrink:0}} />
             <span style={{fontSize:11,color:"var(--t3)"}}>{label}</span>
           </div>
@@ -862,7 +858,7 @@ function VilleChamp({ id, label, valeur, villes, onChoix, onPosition, positionEn
         <ul id={id+"-liste"} role="listbox" style={{position:"absolute",left:0,right:0,top:"100%",zIndex:1500,listStyle:"none",margin:"4px 0 0",padding:4,background:"var(--surface)",border:"1px solid rgba(var(--ov),0.15)",borderRadius:12,boxShadow:"0 8px 24px rgba(0,0,0,0.35)"}}>
           {sugg.map((v,i)=>(
             <li key={v.cle} role="option" aria-selected={i===actif} onMouseDown={e=>{ e.preventDefault(); choisir(v); }}
-              style={{padding:"9px 10px",borderRadius:8,cursor:"pointer",background:i===actif?"rgba(var(--ov),0.08)":"transparent"}}>
+              style={{padding:"9px 10px",borderRadius:8,cursor:"pointer",background:i===actif?"rgba(var(--ov),0.14)":"transparent",borderLeft:"3px solid "+(i===actif?"var(--accent)":"transparent")}}>
               <div style={{fontSize:14,color:"var(--t1)"}}>{v.nom}</div>
               <div style={{fontSize:11,color:"var(--t3)"}}>{v.region} · {v.n} station{v.n>1?"s":""}</div>
             </li>
@@ -1055,6 +1051,39 @@ function TrajetVue({ villes, trajet, setTrajet, resultat, calcul, onCalculer, ca
   );
 }
 
+// ── Premier démarrage : quelques réglages pour personnaliser l'app ──
+function Accueil({ reglages:r, maj, onFin }) {
+  const navDefaut = IS_IOS ? "apple" : "google";
+  return (
+    <div role="dialog" aria-modal="true" aria-labelledby="accueil-titre" style={{position:"fixed",inset:0,zIndex:3000,background:"var(--bg-grad)",overflowY:"auto"}}>
+      <div style={{maxWidth:480,margin:"0 auto",padding:"calc(env(safe-area-inset-top) + 20px) 20px calc(env(safe-area-inset-bottom) + 24px)",color:"var(--t1)",fontFamily:POLICE}}>
+        <div style={{fontSize:36}}>⛽</div>
+        <h1 id="accueil-titre" style={{fontSize:24,fontWeight:700,margin:"6px 0 4px"}}>Bienvenue sur {APP_NAME}</h1>
+        <div style={{fontSize:14,color:"var(--t2)",lineHeight:1.5}}>Quatre petites questions pour adapter l'app à ton auto. Tu pourras tout changer plus tard dans Réglages.</div>
+
+        <Ligne titre="1. Ton carburant habituel" aide="Affiché par défaut dans la liste, la carte et Trajet.">
+          <Choix label="Carburant habituel" value={r.carbDefaut} onChange={v=>maj("carbDefaut",v)} options={CARBURANTS.map(c=>[c.key,c.label])} />
+        </Ligne>
+        <Ligne titre="2. Ton véhicule" aide="Sert à calculer l'économie sur un plein et le coût des détours. Approximatif, c'est correct.">
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            <Nombre label="la taille du plein" value={r.plein} onChange={v=>maj("plein",v)} min={10} max={200} step={5} unite="litres par plein" />
+            <Nombre label="la consommation" value={r.conso} onChange={v=>maj("conso",v)} min={2} max={30} step={0.5} unite="L / 100 km" />
+          </div>
+        </Ligne>
+        <Ligne titre="3. Es-tu membre Costco ?" aide="Oui : les stations Costco (réservées aux membres) s'affichent. Non : elles sont cachées partout dans l'app.">
+          <Choix label="Membre Costco" value={r.costcoMembre} onChange={v=>maj("costcoMembre",v)} options={[[true,"Oui"],[false,"Non"]]} />
+        </Ligne>
+        <Ligne titre="4. Ton app de navigation" aide="Ouverte quand tu touches « Itinéraire ».">
+          <Choix label="App de navigation" value={r.navApp||navDefaut} onChange={v=>maj("navApp",v)} options={NAV_APPS.map(a=>[a.key,a.label])} />
+        </Ligne>
+
+        <button className="tab" onClick={onFin} style={{width:"100%",marginTop:20,padding:"14px",borderRadius:14,background:"var(--accent)",color:ON_COLOR,fontSize:16,fontWeight:700}}>C'est parti</button>
+        <button onClick={onFin} style={{display:"block",margin:"12px auto 0",background:"none",border:"none",color:"var(--t3)",fontSize:13,textDecoration:"underline",cursor:"pointer",fontFamily:"inherit"}}>Passer (garder les réglages par défaut)</button>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [stations, setStations]     = useState([]);
   const [ready, setReady]           = useState(false);
@@ -1064,13 +1093,17 @@ export default function App() {
   const leafletReady = true; // Leaflet est intégré au fichier de l'app
   const [reglages, setReglages]     = useState(reglagesInitiaux);
   const majReglage = useCallback((k,v)=>setReglages(r=>({...r,[k]:v})),[]);
-  // Une station « compte » dans les classements sauf si c'est un Costco et qu'on n'est pas membre
+  // Station visible sauf si c'est un Costco et qu'on n'est pas membre (réglage « Je suis membre Costco »)
   const compte = useCallback(s=>reglages.costcoMembre || !s.costco,[reglages.costcoMembre]);
   const [carb, setCarb]             = useState(()=>CARBURANTS.some(c=>c.key===reglages.carbDefaut) ? reglages.carbDefaut : "regulier");
+  // Trajet a son propre carburant : celui des réglages par défaut (indépendant de l'onglet choisi dans Stations)
+  const [carbTrajet, setCarbTrajet] = useState(()=>CARBURANTS.some(c=>c.key===reglages.carbDefaut) ? reglages.carbDefaut : "regulier");
+  useEffect(()=>{ if (CARBURANTS.some(c=>c.key===reglages.carbDefaut)) setCarbTrajet(reglages.carbDefaut); },[reglages.carbDefaut]);
   const [region, setRegion]         = useState(PREFS.region || "Toutes");
   const [favs, setFavs]             = useState(()=>new Set(Array.isArray(PREFS.favs)?PREFS.favs:[]));
   const [favsSig, setFavsSig] = useState(()=>PREFS.favsSig && typeof PREFS.favsSig==="object" ? PREFS.favsSig : {});
   const [bienvenue, setBienvenue]   = useState(!PREFS.vu);
+  const [accueil, setAccueil]       = useState(!PREFS.accueilFait);   // questions du premier démarrage
   const regionRef = useRef(null);
   const navApp = reglages.navApp || (IS_IOS ? "apple" : "google");
   const setNavApp = useCallback(v=>majReglage("navApp",v),[majReglage]);
@@ -1163,8 +1196,8 @@ export default function App() {
   const trajetMemo = useMemo(()=>({ dep: trajet.dep?.type==="ville" ? trajet.dep.cle : trajet.dep?.type==="position" ? "@position" : null,
     arr: trajet.arr?.type==="ville" ? trajet.arr.cle : null }),[trajet]);
   useEffect(()=>{
-    ecrirePrefs({ reglages, region, favs:[...favs], favsSig, vu: !bienvenue, trajet: trajetMemo });
-  },[reglages, region, favs, favsSig, bienvenue, trajetMemo]);
+    ecrirePrefs({ reglages, region, favs:[...favs], favsSig, vu: !bienvenue, accueilFait: !accueil, trajet: trajetMemo });
+  },[reglages, region, favs, favsSig, bienvenue, accueil, trajetMemo]);
   useEffect(()=>{ if (modeGps || region!=="Toutes") setBienvenue(false); },[modeGps, region]);
 
   // Favoris robustes : l'identifiant d'une station change si la Régie corrige son adresse ou ses coordonnées.
@@ -1252,8 +1285,8 @@ export default function App() {
   const candsTrajet = useMemo(()=>{
     if (!resultat) return [];
     const f = resultat.km / (longueurTrace(resultat.pts) || resultat.km || 1);   // ≈ 1 avec OSRM, ≈ 1,25 en ligne droite
-    return corridor(stations, resultat.pts, reglages.detourMax).map(s=>({ ...s, kmTrajet: s.kmTrajet*f }));
-  },[stations, resultat, reglages.detourMax]);
+    return corridor(stations.filter(compte), resultat.pts, reglages.detourMax).map(s=>({ ...s, kmTrajet: s.kmTrajet*f }));
+  },[stations, resultat, reglages.detourMax, compte]);
   const rangeTrajet = useMemo(()=>{
     const r={}; CARBURANTS.forEach(c=>{ r[c.key]=rangeOf(candsTrajet.filter(compte).map(s=>s[c.key])); }); return r;
   },[candsTrajet,compte]);
@@ -1266,13 +1299,14 @@ export default function App() {
     return stations.map(s=>{ const r=distanceRoute(gps, maRive, s); return {...s, dist:r.dist, pont:r.pont}; });
   },[stations,gps,maRive]);
 
-  // Zone = rayon GPS ou région. Sert de base aux couleurs, au Top 5 et à la carte
+  // Zone = rayon GPS ou région (sans Costco si non-membre). Sert de base aux couleurs, à la liste et à la carte
   // (indépendante de la recherche et du tri, pour que les couleurs ne bougent pas en tapant).
   const zone = useMemo(()=>{
-    if (modeGps&&gps) return stationsWithDist.filter(st=>st.dist!=null&&st.dist<=rayon);
-    if (region!=="Toutes") return stationsWithDist.filter(st=>st.region===region);
-    return stationsWithDist;
-  },[stationsWithDist,modeGps,gps,rayon,region]);
+    const vis = stationsWithDist.filter(compte);
+    if (modeGps&&gps) return vis.filter(st=>st.dist!=null&&st.dist<=rayon);
+    if (region!=="Toutes") return vis.filter(st=>st.region===region);
+    return vis;
+  },[stationsWithDist,modeGps,gps,rayon,region,compte]);
 
   const filtered = useMemo(()=>{
     let s=zone.filter(st=>st[carb]!=null);
@@ -1296,10 +1330,6 @@ export default function App() {
     return result;
   },[zone,compte]);
 
-  // Top 5 = les moins chères de la zone (à égalité de prix, la plus proche d'abord)
-  const top5    = useMemo(()=>zone.filter(s=>s[carb]!=null&&compte(s)).sort((a,b)=>(a[carb]-b[carb])||((a.dist??0)-(b.dist??0))).slice(0,5),[zone,carb,compte]);
-  const costcoExclus = !reglages.costcoMembre && zone.some(s=>s.costco&&s[carb]!=null);
-  const zoneNom = modeGps&&gps ? rayon+" km autour de toi" : region==="Toutes" ? "Québec" : region;
   // Zone de comparaison affichée sur l'étiquette : le rayon autour de toi est le plus représentatif
   const etiquetteZone = modeGps&&gps ? "Le moins cher à "+rayon+NBSP+"km de toi"
     : region==="Toutes" ? "Le moins cher au Québec" : "Le moins cher · "+region;
@@ -1354,6 +1384,7 @@ export default function App() {
         .card:active { transform: scale(0.98); }
         .card:focus-visible, .tab:focus-visible, a:focus-visible, button:focus-visible { outline: 2px solid var(--t1); outline-offset: 2px; }
         .leaflet-container { background: var(--bg) !important; }
+        .leaflet-control-attribution { font-size: 9px !important; line-height: 1.3 !important; max-width: 70%; }
       `}</style>
 
       {/* Header */}
@@ -1384,12 +1415,14 @@ export default function App() {
           </div>
         )}
         {gpsErr && <GpsAide err={gpsErr} onRetry={requestGps} onClose={()=>setGpsErr(null)} />}
-        {modeGps&&gps && (
-          <div style={{marginTop:10,display:"flex",alignItems:"center",gap:6}}>
-            <span style={{fontSize:12,color:"var(--t3)",flexShrink:0}}>Jusqu'à</span>
+        {modeGps&&gps && (vue==="liste"||vue==="carte") && (
+          <div style={{marginTop:10}}>
+          <div id="rayon-titre" style={{fontSize:12,color:"var(--t3)",marginBottom:5}}>Stations à moins de… de toi (distance en voiture)</div>
+          <div role="group" aria-labelledby="rayon-titre" style={{display:"flex",alignItems:"center",gap:6}}>
             {RAYONS.map(r=>(
               <button key={r} className="tab" aria-pressed={rayon===r} onClick={()=>setRayon(r)} style={{flex:1,padding:"5px 0",borderRadius:8,fontSize:12,fontWeight:600,background:rayon===r?"var(--accent)":"rgba(var(--ov),0.06)",color:rayon===r?ON_COLOR:"var(--t2)",border:rayon===r?"none":"1px solid rgba(var(--ov),0.08)"}}>{r}{NBSP}km</button>
             ))}
+          </div>
           </div>
         )}
       </div>
@@ -1398,13 +1431,13 @@ export default function App() {
       {/* Tabs carburant */}
       {vue!=="reglages" && <div style={{padding:"14px 20px 0",display:"flex",gap:8}}>
         {CARBURANTS.map(c=>{
-          const isActive = carb===c.key;
+          const carbVue = vue==="trajet" ? carbTrajet : carb;
+          const isActive = carbVue===c.key;
           const cMin  = (vue==="trajet" ? (resultat ? rangeTrajet : null) : priceRange)?.[c.key]?.min;
           return (
-            <button key={c.key} className="tab" aria-pressed={isActive} onClick={()=>setCarb(c.key)} style={{flex:1,padding:"8px 0 6px",borderRadius:12,fontSize:13,fontWeight:600,background:isActive?"rgba(var(--ov),0.12)":"rgba(var(--ov),0.04)",color:isActive?"var(--t1)":"var(--t3)",border:isActive?"1px solid rgba(var(--ov),0.2)":"1px solid transparent",display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
-              <span>{c.label}</span>
-              {cMin && <span style={{fontSize:11,fontWeight:400,color:isActive?"var(--t3)":"var(--t3)",fontFamily:POLICE_MONO}}>dès {dec(cMin)}{NBSP}¢</span>}
-              {isActive && <div style={{width:20,height:2,borderRadius:1,background:"var(--t1)",marginTop:1}} />}
+            <button key={c.key} className="tab" aria-pressed={isActive} onClick={()=>(vue==="trajet"?setCarbTrajet:setCarb)(c.key)} style={{flex:1,padding:"8px 0 7px",borderRadius:12,fontSize:13,fontWeight:700,background:isActive?"var(--accent)":"rgba(var(--ov),0.04)",color:isActive?ON_COLOR:"var(--t3)",border:isActive?"1px solid var(--accent)":"1px solid rgba(var(--ov),0.08)",display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+              <span>{isActive?"✓ ":""}{c.label}</span>
+              {cMin && <span style={{fontSize:11,fontWeight:isActive?600:400,color:isActive?ON_COLOR:"var(--t3)",opacity:isActive?0.9:1,fontFamily:POLICE_MONO}}>dès {dec(cMin)}{NBSP}¢</span>}
             </button>
           );
         })}
@@ -1436,48 +1469,10 @@ export default function App() {
         </div>
       )}
 
-      {/* VUE TOP 5 */}
-      {vue==="top5" && (
-        <div style={{padding:"16px 20px"}}>
-          <div style={{fontSize:12,fontWeight:600,color:"var(--t3)",marginBottom:14,textTransform:"uppercase",letterSpacing:1}}>
-            {"Les 5 moins chères · "+cInfo.label+" · "+zoneNom}
-          </div>
-          {costcoExclus && <div style={{fontSize:11,color:"var(--t3)",margin:"-8px 0 12px"}}>Stations Costco exclues (Réglages › Costco).</div>}
-          {top5.length===0
-            ? <div style={{textAlign:"center",padding:40,color:"var(--t3)"}}>{modeGps?"Aucune station dans ce rayon":"Aucune station trouvée"}</div>
-            : top5.map((s,i)=>{
-              const tp = s[carb];
-              const tRange = priceRange?.[carb];
-              const tColor = priceColor(tp, tRange);
-              return (
-                <div key={s.id} className="card" role="button" tabIndex={0} aria-label={(s.banniere||"Station")+", "+s.adresse+", "+fmt(s[carb])} onKeyDown={e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); setSelected(s); } }} onClick={()=>setSelected(s)} style={{background:i===0?"rgba(var(--ov),0.06)":"rgba(var(--ov),0.03)",border:i===0?"1px solid rgba(var(--ov),0.15)":"1px solid rgba(var(--ov),0.07)",borderRadius:16,padding:"14px 16px",marginBottom:10,display:"flex",alignItems:"center",gap:12,cursor:"pointer",transition:"transform 0.15s"}}>
-                  <div style={{width:32,height:32,borderRadius:"50%",flexShrink:0,background:i===0?tColor:"rgba(var(--ov),0.08)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:i===0?14:13,fontWeight:700,color:i===0?ON_COLOR:"var(--t3)"}}>{i===0?"★":i+1}</div>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontWeight:600,fontSize:14}}>{s.banniere||"—"}</div>
-                    <div style={{fontSize:11,color:"var(--t3)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.adresse}</div>
-                    {s.costco && <div style={{fontSize:11,color:"var(--warn-t)",marginTop:1}}>* Réservé aux membres Costco</div>}
-                    <div style={{display:"flex",gap:8,marginTop:2,alignItems:"center"}}>
-                      {s.dist!=null && <span style={{fontSize:11,color:"var(--accent)",fontWeight:600}}>{"📍"} ≈{NBSP}{fmtDist(s.dist)}{s.pont?" (pont)":""}</span>}
-                      <span style={{fontSize:11,color:"var(--t3)"}}>{s.region}</span>
-                    </div>
-                  </div>
-                  <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",flexShrink:0}}>
-                    <button onClick={e=>{ e.stopPropagation(); toggleFav(s.id); }} onKeyDown={e=>e.stopPropagation()} aria-pressed={favs.has(s.id)} aria-label={favs.has(s.id)?"Retirer des favoris":"Ajouter aux favoris"}
-                      style={{background:"none",border:"none",cursor:"pointer",fontSize:22,lineHeight:1,width:44,height:40,margin:"-10px -10px 0 0",color:favs.has(s.id)?"var(--high)":"var(--t3)"}}>{favs.has(s.id)?"♥":"♡"}</button>
-                    <div style={{fontFamily:POLICE_MONO,fontSize:20,fontWeight:500,color:i===0?tColor:"var(--t1)"}}>{fmt(tp)}</div>
-                    <div style={{fontSize:11,color:"var(--t3)"}}>{cInfo.label}, le litre</div>
-                    {tRange?.avg!=null && tRange.avg-tp>=0.05 && <div style={{fontSize:11,color:TIER_COLOR.low,marginTop:2}}>{dec(tRange.avg-tp)}{NBSP}¢ sous la moyenne</div>}
-                  </div>
-                </div>
-              );
-            })}
-        </div>
-      )}
-
       {/* VUE TRAJET */}
       {vue==="trajet" && (
         <TrajetVue villes={villes} trajet={trajet} setTrajet={setTrajet} resultat={resultat} calcul={calcul} onCalculer={calculerTrajet}
-          cands={candsTrajet} range={rangeTrajet[carb]} carb={carb} cInfo={cInfo} reglages={reglages} majReglage={majReglage}
+          cands={candsTrajet} range={rangeTrajet[carbTrajet]} carb={carbTrajet} cInfo={CARBURANTS.find(c=>c.key===carbTrajet)} reglages={reglages} majReglage={majReglage}
           favs={favs} toggleFav={toggleFav} onSelect={setSelected} navApp={navApp}
           carteFocus={carteFocus} setCarteFocus={setCarteFocus} onPosition={positionTrajet} compte={compte} />
       )}
@@ -1592,7 +1587,9 @@ export default function App() {
         </div>
       )}
 
-      {selected && <StationSheet station={vue==="trajet" ? selected : (stationsWithDist.find(x=>x.id===selected.id) ?? selected)} carb={carb} gps={vue==="trajet"?null:gps} onLocaliser={positionTrajet}
+      {accueil && <Accueil reglages={reglages} maj={majReglage} onFin={()=>{ setAccueil(false); if (CARBURANTS.some(c=>c.key===reglages.carbDefaut)) setCarb(reglages.carbDefaut); }} />}
+
+      {selected && <StationSheet station={vue==="trajet" ? selected : (stationsWithDist.find(x=>x.id===selected.id) ?? selected)} carb={vue==="trajet"?carbTrajet:carb} gps={vue==="trajet"?null:gps} onLocaliser={positionTrajet}
         priceRange={vue==="trajet"?rangeTrajet:favs.has(selected.id)&&vue==="favoris"?rangeQuebec:priceRange} onClose={()=>setSelected(null)}
         onVoirCarte={s=>{ if (vue==="trajet") setCarteFocus(s); else voirSurCarte(s); }}
         fav={favs.has(selected.id)} onToggleFav={toggleFav} navApp={navApp} onNavApp={setNavApp} plein={reglages.plein} conso={reglages.conso}
@@ -1601,18 +1598,18 @@ export default function App() {
       </div>{/* fin wrapper paddingBottom */}
 
       {/* Barre de navigation fixe en bas */}
-      <div id="barre-nav" style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:480,zIndex:999,background:"var(--nav-bg)",borderTop:"1px solid rgba(var(--ov),0.08)",backdropFilter:"blur(12px)",padding:"8px 6px calc(12px + env(safe-area-inset-bottom))",display:"flex",gap:4}}>
+      <div id="barre-nav" style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:480,zIndex:1200,background:"var(--nav-bg)",borderTop:"1px solid rgba(var(--ov),0.08)",backdropFilter:"blur(12px)",padding:"8px 6px calc(12px + env(safe-area-inset-bottom))",display:"flex",gap:4}}>
         {[
           ...VUES.map(x=>({v:x.key, icon:x.icon, label:x.label, badge:x.key==="favoris"&&favStations.length ? favStations.length : null})),
           {v:"reglages", icon:"⚙", label:"Réglages"},
         ].map(({v,icon,label,badge})=>(
-          <button key={v} className="tab" aria-current={vue===v?"page":undefined} aria-label={badge ? label+" ("+badge+")" : undefined} onClick={()=>setVue(v)} style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",alignItems:"center",gap:4,padding:"8px 2px",borderRadius:12,background:"transparent",color:vue===v?"var(--t1)":"var(--t3)"}}>
+          <button key={v} className="tab" aria-current={vue===v?"page":undefined} aria-label={badge ? label+" ("+badge+")" : undefined} onClick={()=>setVue(v)} style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",alignItems:"center",gap:4,padding:"8px 2px",borderRadius:12,background:vue===v?"rgba(var(--ov),0.1)":"transparent",color:vue===v?"var(--accent)":"var(--t3)"}}>
             <span style={{position:"relative",fontSize:20,lineHeight:1}}>
               <span style={{filter:vue===v?"none":"opacity(0.5)"}}>{icon}</span>
               {badge && <span aria-hidden="true" style={{position:"absolute",top:-6,right:-12,minWidth:16,height:16,padding:"0 4px",borderRadius:8,background:"var(--high)",color:"#fff",fontSize:10,fontWeight:700,lineHeight:"16px",textAlign:"center"}}>{badge}</span>}
             </span>
-            <span style={{fontSize:11,fontWeight:vue===v?600:400,letterSpacing:0.2,whiteSpace:"nowrap"}}>{label}</span>
-            {vue===v && <div style={{width:20,height:2,borderRadius:1,background:"var(--t1)",marginTop:1}} />}
+            <span style={{fontSize:11,fontWeight:vue===v?700:400,letterSpacing:0.2,whiteSpace:"nowrap"}}>{label}</span>
+            <div style={{width:20,height:3,borderRadius:2,background:vue===v?"var(--accent)":"transparent",marginTop:1}} />
           </button>
         ))}
       </div>

@@ -13,7 +13,7 @@ const CARBURANTS = [
 ];
 const RAYONS = [5, 10, 25, 50, 100];
 const APP_NAME = "Écono Gaz";
-const APP_VERSION = "12.6";
+const APP_VERSION = "12.7";
 const CONTACT_EMAIL = "econogaz.app@gmail.com";
 const SOURCE_NOM = "Régie essence Québec, Régie de l'énergie"; // mention exigée par la Régie (courriel du 2026-10-06)
 // config.json (modifiable sur GitHub sans reconstruire l'app) : lien de don, compteur de visites
@@ -30,8 +30,25 @@ function compterVisite(code) {
   img.src = "https://"+code+".goatcounter.com/count?p="+encodeURIComponent("/app")+"&t="+encodeURIComponent(APP_NAME)
     +"&s="+encodeURIComponent(screen.width+","+screen.height+","+(window.devicePixelRatio||1))+"&rnd="+Math.random().toString(36).slice(2);
 }
-const POLICE      = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif";
-const POLICE_MONO = "ui-monospace,SFMono-Regular,Menlo,Consolas,monospace";
+// Polices : un thème peut les remplacer avec --police et --police-prix (ex. « Folle aux chats » : police arrondie)
+const POLICE      = "var(--police, -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif)";
+const POLICE_MONO = "var(--police-prix, ui-monospace,SFMono-Regular,Menlo,Consolas,monospace)";
+
+// ── Thème « Folle aux chats » : petits dessins (SVG décoratifs, couleur du texte courant) ──
+function Patte({ taille=14, style }) {
+  return <svg aria-hidden="true" width={taille} height={taille} viewBox="0 0 24 24" fill="currentColor" style={style}><ellipse cx="12" cy="16" rx="5" ry="4"/><circle cx="6" cy="10" r="2.2"/><circle cx="10" cy="6.5" r="2.2"/><circle cx="14" cy="6.5" r="2.2"/><circle cx="18" cy="10" r="2.2"/></svg>;
+}
+function TeteChat({ taille=30 }) {
+  return (
+    <svg aria-hidden="true" width={taille} height={taille} viewBox="0 0 32 32" style={{flexShrink:0}}>
+      <path d="M5 5 L11 11.5 Q16 9.8 21 11.5 L27 5 L27 18 Q27 28 16 28 Q5 28 5 18 Z" fill="var(--accent)"/>
+      <circle cx="11.8" cy="18" r="1.7" fill="var(--bg)"/><circle cx="20.2" cy="18" r="1.7" fill="var(--bg)"/>
+      <path d="M14.8 21.6 L17.2 21.6 L16 23 Z" fill="var(--bg)"/>
+      <path d="M3 20 L9 20.6 M3 23 L9 22.2 M29 20 L23 20.6 M29 23 L23 22.2" stroke="var(--accent)" strokeWidth="1.2" strokeLinecap="round"/>
+    </svg>
+  );
+}
+const estChats = () => typeof document!=="undefined" && document.documentElement.dataset.theme==="chats";
 const VUES = [
   { key:"liste",   label:"Stations", icon:"☰" },
   { key:"trajet",  label:"Trajet",   icon:"↝" },
@@ -289,12 +306,12 @@ function StationCard({ s, carb, range, best, bestLabel="Le moins cher", showDist
   return (
     <div className="card" role="button" tabIndex={0} aria-label={(s.banniere||"Station")+", "+s.adresse+", "+(fmt(p)??"prix non disponible")}
       onKeyDown={e=>{ if(e.target===e.currentTarget&&(e.key==="Enter"||e.key===" ")){ e.preventDefault(); onSelect(s); } }} onClick={()=>onSelect(s)}
-      style={{background:best?"rgba(var(--ov),0.06)":"rgba(var(--ov),0.03)",border:best?"1px solid rgba(var(--ov),0.15)":"1px solid rgba(var(--ov),0.07)",borderRadius:16,padding:"13px 14px",marginBottom:9,display:"flex",alignItems:"center",gap:12,cursor:"pointer",transition:"transform 0.15s"}}>
+      style={{background:best?"rgba(var(--ov),0.06)":"rgba(var(--ov),0.03)",border:best?"1px solid rgba(var(--ov),0.15)":"1px solid rgba(var(--ov),0.07)",borderRadius:"var(--rayon-carte,16px)",padding:"13px 14px",marginBottom:9,display:"flex",alignItems:"center",gap:12,cursor:"pointer",transition:"transform 0.15s"}}>
       <div style={{flex:1,minWidth:0}}>
         <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2}}>
           <span style={{fontWeight:600,fontSize:14,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.banniere||"—"}</span>
         </div>
-        {best && <div style={{display:"inline-block",background:"var(--accent)",color:ON_COLOR,fontSize:11,fontWeight:700,padding:"2px 7px",borderRadius:6,margin:"2px 0 4px"}}>✓ {bestLabel}</div>}
+        {best && <div style={{display:"inline-flex",alignItems:"center",gap:4,background:"var(--accent)",color:ON_COLOR,fontSize:11,fontWeight:700,padding:"2px 7px",borderRadius:estChats()?999:6,margin:"2px 0 4px"}}>{estChats() ? <Patte taille={12}/> : "✓"} {bestLabel}</div>}
         <div style={{fontSize:11,color:"var(--t3)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.adresse}</div>
         {s.costco && <div style={{fontSize:11,color:"var(--warn-t)",marginTop:2}}>* Réservé aux membres Costco</div>}
         <div style={{display:"flex",gap:10,marginTop:4,alignItems:"center",flexWrap:"wrap"}}>
@@ -419,8 +436,8 @@ function Reglages({ reglages:r, maj, nbFavs, onEffacerFavs, onReinitialiser, dat
       </Section>
 
       <Section titre="Affichage">
-        <Ligne titre="Thème" aide="« Automatique » suit le réglage clair ou sombre de ton téléphone. Le thème clair se lit mieux en plein soleil.">
-          <Choix label="Thème" value={r.theme} onChange={v=>maj("theme",v)} options={[["auto","Automatique"],["clair","Clair"],["sombre","Sombre"]]} />
+        <Ligne titre="Thème" aide="« Auto » suit le réglage clair ou sombre de ton téléphone. Le thème clair se lit mieux en plein soleil. « Chats » : le thème Folle aux chats, rose et tout en rondeurs.">
+          <Choix label="Thème" value={r.theme} onChange={v=>maj("theme",v)} options={[["auto","Auto"],["clair","Clair"],["sombre","Sombre"],["chats","Chats"]]} />
         </Ligne>
       </Section>
 
@@ -830,7 +847,7 @@ function CarteView({ stations, carb, gps, minP, maxP, priceRange, onSelectStatio
       <div ref={mapRef} style={{width:"100%",height:"100%"}} />
       {/* Légende */}
       <div aria-label="Légende des prix" style={{position:"absolute",top:10,right:10,zIndex:1000,background:"var(--panel-bg)",borderRadius:10,padding:"4px 8px",border:"1px solid rgba(var(--ov),0.08)",display:"flex",gap:8,pointerEvents:"none"}}>
-        {[["var(--accent)","Bas"],["var(--mid)","Moyen"],["var(--high)","Élevé"]].map(([col,label])=>(
+        {[["var(--low)","Bas"],["var(--mid)","Moyen"],["var(--high)","Élevé"]].map(([col,label])=>(
           <div key={label} style={{display:"flex",alignItems:"center",gap:4}}>
             <div style={{width:10,height:10,borderRadius:"50%",background:col,flexShrink:0}} />
             <span style={{fontSize:11,color:"var(--t3)"}}>{label}</span>
@@ -1166,12 +1183,13 @@ export default function App() {
   // Thème
   useEffect(()=>{
     const el = document.documentElement;
-    if (reglages.theme==="clair") el.dataset.theme="light"; else if (reglages.theme==="sombre") el.dataset.theme="dark"; else delete el.dataset.theme;
+    const THEMES = { clair:"light", sombre:"dark", chats:"chats" };
+    if (THEMES[reglages.theme]) el.dataset.theme = THEMES[reglages.theme]; else delete el.dataset.theme;
     // Couleur de la barre d'état : suivre le thème choisi dans l'app, pas seulement celui du téléphone
     document.querySelectorAll('meta[name="theme-color"]').forEach(m=>{
       if (!m.dataset.media) m.dataset.media = m.getAttribute("media") || "";
       if (reglages.theme==="auto") m.setAttribute("media", m.dataset.media);
-      else { m.removeAttribute("media"); m.setAttribute("content", reglages.theme==="clair" ? "#f8fafc" : "#0f172a"); }
+      else { m.removeAttribute("media"); m.setAttribute("content", ({ clair:"#f8fafc", chats:"#fff4f6" })[reglages.theme] ?? "#0f172a"); }
     });
     if (reglages.theme==="auto") document.querySelectorAll('meta[name="theme-color"]').forEach(m=>m.setAttribute("content", /dark/.test(m.dataset.media) ? "#0f172a" : "#f8fafc"));
   },[reglages.theme]);
@@ -1393,7 +1411,7 @@ export default function App() {
 
   if (!ready) return (
     <div style={{minHeight:"100vh",background:"var(--bg-grad)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:14,color:"var(--t3)"}}>
-      <span style={{fontSize:40}}>{"⛽"}</span>
+      {reglages.theme==="chats" ? <TeteChat taille={48}/> : <span style={{fontSize:40}}>{"⛽"}</span>}
       {loadErr ? (
         <>
           <div style={{textAlign:"center",padding:"0 32px",color:"var(--t2)"}}>{loadErr}</div>
@@ -1404,7 +1422,13 @@ export default function App() {
   );
 
   return (
-    <div style={{minHeight:"100vh",background:"var(--bg-grad)",fontFamily:POLICE,color:"var(--t1)",maxWidth:480,margin:"0 auto"}}>
+    <div style={{minHeight:"100vh",background:"var(--bg-grad)",fontFamily:POLICE,color:"var(--t1)",maxWidth:480,margin:"0 auto",position:"relative",isolation:"isolate"}}>
+      {reglages.theme==="chats" && (
+        <div aria-hidden="true" style={{position:"fixed",inset:0,zIndex:-1,pointerEvents:"none",color:"var(--accent)",opacity:0.07,maxWidth:480,margin:"0 auto",overflow:"hidden"}}>
+          <Patte taille={120} style={{position:"absolute",top:"28%",right:-28,transform:"rotate(18deg)"}}/>
+          <Patte taille={90} style={{position:"absolute",top:"66%",left:-24,transform:"rotate(-24deg)"}}/>
+        </div>
+      )}
       <style>{`
         * { box-sizing: border-box; }
         ::-webkit-scrollbar { width: 4px; }
@@ -1424,7 +1448,7 @@ export default function App() {
       {/* Header */}
       <div style={{padding:"calc(env(safe-area-inset-top) + 14px) 20px 12px",borderBottom:"1px solid rgba(var(--ov),0.06)"}}>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
-          <span style={{fontSize:22}}>{"⛽"}</span>
+          {reglages.theme==="chats" ? <TeteChat taille={30}/> : <span style={{fontSize:22}}>{"⛽"}</span>}
           <div style={{flex:1}}>
             <h1 style={{fontSize:20,fontWeight:700,letterSpacing:-0.5,margin:0}}>{APP_NAME}</h1>
             <div style={{fontSize:12,color:"var(--t2)"}}>Prix de l'essence au Québec</div>
@@ -1549,7 +1573,7 @@ export default function App() {
       {vue==="liste" && (
         <div style={{padding:"14px 20px"}} ref={topRef}>
           {bienvenue && !modeGps && (
-            <div style={{marginBottom:14,padding:"14px 16px",borderRadius:16,background:"rgba(34,197,94,0.08)",border:"1px solid rgba(34,197,94,0.3)"}}>
+            <div style={{marginBottom:14,padding:"14px 16px",borderRadius:"var(--rayon-carte,16px)",background:"rgba(var(--ov),0.05)",border:"1px solid var(--accent)"}}>
               <div style={{fontSize:15,fontWeight:700,marginBottom:4}}>Bienvenue sur {APP_NAME} 👋</div>
               <div style={{fontSize:13,color:"var(--t2)",lineHeight:1.5,marginBottom:12}}>Pour voir les prix près de chez toi, localise-toi ou choisis ta région.</div>
               <div style={{display:"flex",gap:8}}>
@@ -1561,7 +1585,7 @@ export default function App() {
           )}
           {filtered.length>0 && (
             <div style={{display:"flex",gap:8,marginBottom:14}}>
-              {[{label:"Le plus bas",val:fmt(minP),color:"var(--accent)"},{label:"Moyenne",val:avgP!=null?fmt(avgP):null,color:"var(--mid)"},{label:"Le plus haut",val:fmt(maxP),color:"var(--high)"}].map(item=>(
+              {[{label:"Le plus bas",val:fmt(minP),color:"var(--low)"},{label:"Moyenne",val:avgP!=null?fmt(avgP):null,color:"var(--mid)"},{label:"Le plus haut",val:fmt(maxP),color:"var(--high)"}].map(item=>(
                 <div key={item.label} style={{flex:1,background:"rgba(var(--ov),0.04)",borderRadius:12,padding:"8px 10px",textAlign:"center",border:"1px solid rgba(var(--ov),0.06)"}}>
                   <div style={{fontSize:11,color:"var(--t3)",marginBottom:2}}>{item.label}</div>
                   <div style={{fontFamily:POLICE_MONO,fontSize:16,fontWeight:500,color:item.color}}>{item.val??"—"}</div>
@@ -1639,7 +1663,7 @@ export default function App() {
         ].map(({v,icon,label,badge})=>(
           <button key={v} className="tab" aria-current={vue===v?"page":undefined} aria-label={badge ? label+" ("+badge+")" : undefined} onClick={()=>setVue(v)} style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",alignItems:"center",gap:4,padding:"8px 2px",borderRadius:12,background:vue===v?"rgba(var(--ov),0.1)":"transparent",color:vue===v?"var(--accent)":"var(--t3)"}}>
             <span style={{position:"relative",fontSize:20,lineHeight:1}}>
-              <span style={{filter:vue===v?"none":"opacity(0.5)"}}>{icon}</span>
+              <span style={{filter:vue===v?"none":"opacity(0.5)"}}>{reglages.theme==="chats"&&v==="liste" ? <Patte taille={20} style={{verticalAlign:"-3px"}}/> : icon}</span>
               {badge && <span aria-hidden="true" style={{position:"absolute",top:-6,right:-12,minWidth:16,height:16,padding:"0 4px",borderRadius:8,background:"var(--high)",color:"#fff",fontSize:10,fontWeight:700,lineHeight:"16px",textAlign:"center"}}>{badge}</span>}
             </span>
             <span style={{fontSize:11,fontWeight:vue===v?700:400,letterSpacing:0.2,whiteSpace:"nowrap"}}>{label}</span>

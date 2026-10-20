@@ -49,6 +49,10 @@ html = f"""<!doctype html>
 @media (prefers-color-scheme:light){{:root:not([data-theme=dark]){{color-scheme:light;--bg:#f8fafc;--bg-grad:linear-gradient(160deg,#f8fafc 0%,#eef2f7 100%);--surface:#ffffff;--ov:15,23,42;
 --t1:#0f172a;--t2:#334155;--t3:#475569;--accent:#15803d;--low:#15803d;--mid:#b45309;--high:#dc2626;--on:#ffffff;
 --nav-bg:rgba(255,255,255,.97);--panel-bg:rgba(255,255,255,.95);--warn-t:#92400e;--err-t:#b91c1c;--err-t2:#991b1b;--scroll:#cbd5e1}}}}
+:root[data-theme=chats]{{color-scheme:light;--bg:#fff4f6;--bg-grad:linear-gradient(170deg,#fff4f6 0%,#fdeef3 100%);--surface:#ffffff;--ov:120,40,80;
+--t1:#3a1f36;--t2:#5e3b58;--t3:#74536e;--accent:#b8325f;--low:#0e7a6b;--mid:#a85a07;--high:#b42323;--on:#ffffff;
+--nav-bg:rgba(255,255,255,.97);--panel-bg:rgba(255,255,255,.95);--warn-t:#8a4b06;--err-t:#b42323;--err-t2:#8e1c1c;--scroll:#e7b9c8;
+--police:ui-rounded,"SF Pro Rounded","Nunito","Varela Round",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;--police-prix:var(--police);--rayon-carte:22px}}
 html,body{{margin:0;background:var(--bg);-webkit-tap-highlight-color:transparent}}
 {css}</style>
 </head>

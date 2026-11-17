@@ -12,7 +12,7 @@ const OSRM_MAX_KM = 3000;
 
 export function sansAccent(t) { return (t||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase(); }
 // « St-Jean » et « Saint-Jean » doivent donner la même ville
-const cleVille = v => sansAccent(v).replace(/[-'’.]/g," ").replace(/\s+/g," ").trim()
+export const cleVille = v => sansAccent(v).replace(/[-'’.]/g," ").replace(/\s+/g," ").trim()
   .replace(/(^| )ste( |$)/g,"$1sainte$2").replace(/(^| )st( |$)/g,"$1saint$2");
 
 export function haversine(lat1,lng1,lat2,lng2) {

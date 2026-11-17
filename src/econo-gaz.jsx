@@ -4,7 +4,7 @@ import "leaflet.markercluster";
 import "leaflet/dist/leaflet.css";
 import "leaflet.markercluster/dist/MarkerCluster.css";
 import "leaflet.markercluster/dist/MarkerCluster.Default.css";
-import { DETOURS, villesDepuisStations, chercherVilles, itineraireOSRM, itineraireEstime, corridor, meilleurChoix, coutPlein, longueurTrace, pointAuKm, portee } from "./trajet.js";
+import { DETOURS, villesDepuisStations, chercherVilles, itineraireOSRM, itineraireEstime, corridor, meilleurChoix, coutPlein, longueurTrace, pointAuKm, portee, cleVille } from "./trajet.js";
 
 const CARBURANTS = [
   { key: "regulier", label: "Ordinaire", color: "var(--accent)" },
@@ -13,7 +13,7 @@ const CARBURANTS = [
 ];
 const RAYONS = [5, 10, 25, 50, 100];
 const APP_NAME = "Écono Gaz";
-const APP_VERSION = "12.7";
+const APP_VERSION = "12.8";
 const CONTACT_EMAIL = "econogaz.app@gmail.com";
 const SOURCE_NOM = "Régie essence Québec, Régie de l'énergie"; // mention exigée par la Régie (courriel du 2026-10-06)
 // config.json (modifiable sur GitHub sans reconstruire l'app) : lien de don, compteur de visites
@@ -108,7 +108,7 @@ function prixAffiches(r, f) {
 }
 
 function parseData(json) {
-  if (!json || json.version!==1 || !Array.isArray(json.stations)) throw new Error("Format de données inattendu");
+  if (!json || json.version!==1 || !Array.isArray(json.stations) || !Array.isArray(json.fields)) throw new Error("Format de données inattendu");
   const f = Object.fromEntries(json.fields.map((k,i)=>[k,i]));
   const stations = json.stations.map(r=>{
     if (!Array.isArray(r)) return null;
@@ -129,7 +129,8 @@ function parseData(json) {
   });
   const propres = stations.filter(st=>st && st.id);
   if (propres.length < 500) throw new Error("Trop peu de stations valides");
-  return { stations: propres, ts: typeof json.ts==="string" ? json.ts.slice(0,25) : null };
+  // Horodatage gardé seulement s'il est lisible (sinon « il y a NaN min »)
+  return { stations: propres, ts: typeof json.ts==="string" && !Number.isNaN(Date.parse(json.ts)) ? json.ts.slice(0,25) : null };
 }
 function lireCache() {
   try { const c = localStorage.getItem(CACHE_KEY); return c ? JSON.parse(c) : null; } catch { return null; }
@@ -201,6 +202,20 @@ const REGLAGES_DEFAUT = {
   detourMax: 3,          // Trajet : écart maximal à la route (km)
   costcoMembre: false,   // non membre : stations Costco cachées (liste, carte, Trajet, moyennes)
 };
+// Thème : appliqué dès le chargement (pas de flash du mauvais thème), puis à chaque changement du réglage
+const THEMES = { clair:"light", sombre:"dark", chats:"chats" };
+function appliquerTheme(theme) {
+  if (typeof document==="undefined") return;
+  const el = document.documentElement;
+  if (THEMES[theme]) el.dataset.theme = THEMES[theme]; else delete el.dataset.theme;
+  // Couleur de la barre d'état : suivre le thème choisi dans l'app, pas seulement celui du téléphone
+  document.querySelectorAll('meta[name="theme-color"]').forEach(m=>{
+    if (m.dataset.media==null) m.dataset.media = m.getAttribute("media") || "";
+    if (!THEMES[theme]) { m.setAttribute("media", m.dataset.media); m.setAttribute("content", /dark/.test(m.dataset.media) ? "#0f172a" : "#f8fafc"); }
+    else { m.removeAttribute("media"); m.setAttribute("content", ({ clair:"#f8fafc", chats:"#fff4f6" })[theme] ?? "#0f172a"); }
+  });
+}
+appliquerTheme(PREFS.reglages?.theme);
 function reglagesInitiaux() {
   const r = { ...REGLAGES_DEFAUT, ...(PREFS.reglages||{}) };
   // Reprise des anciennes préférences (v6)
@@ -265,6 +280,21 @@ function fmtMaj(ts) {
 }
 
 const PG = 50;
+const COLLATEUR = new Intl.Collator("fr-CA", { sensitivity:"base", numeric:true });
+// À égalité : la plus proche d'abord (si la position est connue), puis par nom
+const departage = (a,b) => ((a.dist??Infinity)-(b.dist??Infinity)) || COLLATEUR.compare(a.banniere,b.banniere) || COLLATEUR.compare(a.adresse,b.adresse);
+
+// Fenêtres par-dessus l'app (fiche, bienvenue) : le fond ne défile pas, le focus entre dans la fenêtre puis revient où il était
+function useFenetreModale(ref) {
+  useEffect(()=>{
+    const avant = document.activeElement;
+    const { overflow } = document.body.style;
+    document.body.style.overflow = "hidden";
+    ref.current?.focus({ preventScroll:true });
+    return ()=>{ document.body.style.overflow = overflow; if (avant && document.contains(avant)) avant.focus?.({ preventScroll:true }); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[]);
+}
 
 // ── Aide localisation ─────────────────────────────────────────
 function GpsAide({ err, onRetry, onClose }) {
@@ -363,7 +393,7 @@ function BoutonInfo({ ouvert, basculer, sujet }) {
   return (
     <button type="button" onClick={basculer} aria-expanded={ouvert} aria-label={(ouvert?"Masquer":"Afficher")+" l'explication"+(sujet?" : "+sujet:"")}
       style={{flexShrink:0,width:30,height:30,margin:"-6px -4px -6px 0",border:"none",background:"none",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",padding:0}}>
-      <span aria-hidden="true" style={{width:18,height:18,borderRadius:"50%",border:"1.5px solid "+(ouvert?"var(--accent)":"var(--t3)"),color:ouvert?"var(--accent)":"var(--t3)",fontSize:11,fontWeight:700,fontStyle:"italic",fontFamily:"Georgia,serif",display:"inline-flex",alignItems:"center",justifyContent:"center",background:ouvert?"rgba(34,197,94,0.12)":"none"}}>i</span>
+      <span aria-hidden="true" style={{width:18,height:18,borderRadius:"50%",border:"1.5px solid "+(ouvert?"var(--accent)":"var(--t3)"),color:ouvert?"var(--accent)":"var(--t3)",fontSize:11,fontWeight:700,fontStyle:"italic",fontFamily:"Georgia,serif",display:"inline-flex",alignItems:"center",justifyContent:"center",background:ouvert?"rgba(var(--ov),0.08)":"none"}}>i</span>
     </button>
   );
 }
@@ -536,6 +566,7 @@ function StationSheet({ station, carb, gps, priceRange, onClose, onVoirCarte, fa
   const sheetRef = useRef(null);
   const [dragY, setDragY] = useState(0);
   const [autresApps, setAutresApps] = useState(false);
+  useFenetreModale(sheetRef);
   // Fermer avec Échap
   useEffect(()=>{
     const onKey = e => { if (e.key==="Escape") onClose(); };
@@ -563,9 +594,9 @@ function StationSheet({ station, carb, gps, priceRange, onClose, onVoirCarte, fa
 
   return (
     <div onClick={onBackdrop} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",zIndex:2000,display:"flex",alignItems:"flex-end",backdropFilter:"blur(4px)"}}>
-      <div ref={sheetRef} role="dialog" aria-modal="true" aria-label={"Détails "+(station.banniere||"station")}
+      <div ref={sheetRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={"Détails "+(station.banniere||"station")}
         onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
-        style={{transform:dragY?"translateY("+dragY+"px)":undefined,transition:dragY?"none":"transform 0.2s",width:"100%",maxWidth:480,margin:"0 auto",background:"var(--surface)",borderRadius:"20px 20px 0 0",padding:"0 0 40px",maxHeight:"85vh",overflowY:"auto",animation:"sheetUp 0.28s cubic-bezier(0.34,1.2,0.64,1)",borderTop:"2px solid "+aColor}}>
+        style={{transform:dragY?"translateY("+dragY+"px)":undefined,transition:dragY?"none":"transform 0.2s",width:"100%",maxWidth:480,margin:"0 auto",background:"var(--surface)",borderRadius:"20px 20px 0 0",padding:"0 0 40px",maxHeight:"85vh",overflowY:"auto",overscrollBehavior:"contain",outline:"none",animation:"sheetUp 0.28s cubic-bezier(0.34,1.2,0.64,1)",borderTop:"2px solid "+aColor}}>
         <div style={{display:"flex",justifyContent:"center",padding:"12px 0 4px"}}>
           <div style={{width:40,height:4,borderRadius:2,background:"rgba(var(--ov),0.15)"}} />
         </div>
@@ -578,8 +609,8 @@ function StationSheet({ station, carb, gps, priceRange, onClose, onVoirCarte, fa
               <div style={{fontSize:11,color:"var(--t3)",marginTop:1}}>{station.region}</div>
             </div>
             <div style={{display:"flex",gap:8,flexShrink:0}}>
-            <button onClick={()=>onToggleFav(station.id)} aria-pressed={fav} aria-label={fav?"Retirer des favoris":"Ajouter aux favoris"} style={{background:"rgba(var(--ov),0.08)",border:"none",borderRadius:"50%",width:32,height:32,cursor:"pointer",color:fav?"var(--high)":"var(--t3)",fontSize:17,display:"flex",alignItems:"center",justifyContent:"center"}}>{fav?"♥":"♡"}</button>
-            <button onClick={onClose} aria-label="Fermer" style={{background:"rgba(var(--ov),0.08)",border:"none",borderRadius:"50%",width:32,height:32,cursor:"pointer",color:"var(--t3)",fontSize:14,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+            <button onClick={()=>onToggleFav(station.id)} aria-pressed={fav} aria-label={fav?"Retirer des favoris":"Ajouter aux favoris"} style={{background:"rgba(var(--ov),0.08)",border:"none",borderRadius:"50%",width:42,height:42,cursor:"pointer",color:fav?"var(--high)":"var(--t3)",fontSize:19,display:"flex",alignItems:"center",justifyContent:"center"}}>{fav?"♥":"♡"}</button>
+            <button onClick={onClose} aria-label="Fermer" style={{background:"rgba(var(--ov),0.08)",border:"none",borderRadius:"50%",width:42,height:42,cursor:"pointer",color:"var(--t3)",fontSize:16,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
             </div>
           </div>
           {activeP!=null && (
@@ -677,7 +708,7 @@ function StationSheet({ station, carb, gps, priceRange, onClose, onVoirCarte, fa
         )}
         <div style={{padding:"0 20px",display:"flex",gap:8}}>
           {typeof navigator!=="undefined" && navigator.share && (
-            <button onClick={()=>navigator.share({title:station.banniere, text:(station.banniere||"Station")+" · "+(fmt(activeP)??"")+" "+cInfo.label.toLowerCase()+" · "+station.adresse, url:location.href.split("#")[0]}).catch(()=>{})}
+            <button onClick={()=>navigator.share({title:station.banniere, text:(station.banniere||"Station")+(activeP!=null ? " · "+fmt(activeP)+" "+cInfo.label.toLowerCase() : "")+" · "+station.adresse, url:location.href.split("#")[0]}).catch(()=>{})}
               style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,padding:"10px",borderRadius:12,background:"rgba(var(--ov),0.03)",border:"1px solid rgba(var(--ov),0.06)",color:"var(--t3)",fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>
               {"↗"} Partager
             </button>
@@ -693,12 +724,31 @@ function StationSheet({ station, carb, gps, priceRange, onClose, onVoirCarte, fa
 }
 
 // ── Carte Leaflet ──────────────────────────────────────────────
-function CarteView({ stations, carb, gps, minP, maxP, priceRange, onSelectStation, focusStation, onFocusDone, route, cadrer, compact }) {
+// Cadre englobant les stations ; au-delà de 200 stations on ignore les 2 % les plus excentrées
+// (Îles-de-la-Madeleine, Grand Nord) pour ne pas afficher une carte presque vide.
+function cadreStations(stations, extra) {
+  const pts = stations.filter(s=>s.lat&&s.lng);
+  if (!pts.length) return null;
+  const q = (arr, f) => { const t=[...arr].sort((a,b)=>a-b); return t[Math.min(t.length-1, Math.max(0, Math.round((t.length-1)*f)))]; };
+  const large = pts.length>200, lats = pts.map(s=>s.lat), lngs = pts.map(s=>s.lng);
+  let sud = large?q(lats,0.02):Math.min(...lats), nord = large?q(lats,0.98):Math.max(...lats);
+  let ouest = large?q(lngs,0.02):Math.min(...lngs), est = large?q(lngs,0.98):Math.max(...lngs);
+  if (extra) { sud=Math.min(sud,extra.lat); nord=Math.max(nord,extra.lat); ouest=Math.min(ouest,extra.lng); est=Math.max(est,extra.lng); }
+  return [[sud,ouest],[nord,est]];
+}
+
+// cle : change quand la zone affichée change (région, rayon) → la carte se recadre. ajuster : cadrer sur les stations reçues.
+function CarteView({ stations, carb, gps, priceRange, onSelectStation, focusStation, onFocusDone, route, cle, ajuster, compact }) {
   const mapRef      = useRef(null);
   const leafletRef  = useRef(null);
   const markersRef  = useRef(null);
   const routeRef    = useRef(null);
   const focusRef    = useRef(focusStation); // garder la dernière valeur pour l'init
+  const avaitFocus  = useRef(false);
+  const stationsRef = useRef(stations);
+  stationsRef.current = stations;
+  const selectRef   = useRef(onSelectStation);
+  selectRef.current = onSelectStation;
 
   // Mettre à jour focusRef à chaque changement
   useEffect(() => { focusRef.current = focusStation; }, [focusStation]);
@@ -718,10 +768,11 @@ function CarteView({ stations, carb, gps, minP, maxP, priceRange, onSelectStatio
     const L = window.L;
     if (!L) return;
 
-    // Centre initial : station focalisée > GPS > Québec
+    // Centre initial : station focalisée, sinon le sud du Québec (le cadrage précis suit, dans l'effet « cadrage »)
     const focus = focusRef.current;
-    const initCenter = focus?.lat ? [focus.lat, focus.lng] : gps ? [gps.lat, gps.lng] : [53.0, -70.0];
-    const initZoom   = focus?.lat ? 16 : gps ? 12 : 5;
+    avaitFocus.current = !!focus?.lat;
+    const initCenter = focus?.lat ? [focus.lat, focus.lng] : [46.8, -71.9];
+    const initZoom   = focus?.lat ? 16 : 6;
 
     const map = L.map(mapRef.current, {
       center: initCenter,
@@ -741,14 +792,21 @@ function CarteView({ stations, carb, gps, minP, maxP, priceRange, onSelectStatio
       onFocusDone();
     }
 
-    // Région choisie : cadrer sur ses stations plutôt que sur tout le Québec
-    if (!focus?.lat && !gps && cadrer) {
-      const pts = stations.filter(s=>s.lat&&s.lng).map(s=>[s.lat,s.lng]);
-      if (pts.length) map.fitBounds(pts, { padding:[24,24], maxZoom:13 });
-    }
-
     return () => { map.remove(); leafletRef.current = null; };
   }, []);
+
+  // Cadrage : à l'ouverture, puis quand la zone change (région, rayon, position).
+  // Un trajet se cadre lui-même ; une station demandée (« Voir sur la carte ») garde la priorité.
+  const premierCadrage = useRef(true);
+  useEffect(() => {
+    const map = leafletRef.current;
+    if (!map || route) return;
+    const premier = premierCadrage.current; premierCadrage.current = false;
+    if (premier && avaitFocus.current) return;
+    if (gps && !ajuster) { map.setView([gps.lat, gps.lng], 11); return; }   // position connue, tout le Québec affiché
+    const cadre = cadreStations(stationsRef.current, ajuster ? gps : null);
+    if (cadre) map.fitBounds(cadre, { padding:[28,28], maxZoom:14 });
+  }, [cle, ajuster, gps?.lat, gps?.lng, !!route]);
 
   // Marqueur « Tu es ici » : suit la position, même si on se localise avec la carte déjà ouverte
   const gpsRef = useRef(null);
@@ -760,7 +818,6 @@ function CarteView({ stations, carb, gps, minP, maxP, priceRange, onSelectStatio
     gpsRef.current = L.circleMarker([gps.lat, gps.lng], {
       radius: 8, fillColor: "#16a34a", color: "#fff", weight: 2, opacity: 1, fillOpacity: 1,
     }).addTo(map).bindPopup("Tu es ici");
-    if (!focusRef.current) map.setView([gps.lat, gps.lng], Math.max(map.getZoom(), 12));
   }, [gps?.lat, gps?.lng]);
 
   // Trajet : tracé de la route + départ (A) et arrivée (B), cadrage sur tout le trajet
@@ -809,6 +866,7 @@ function CarteView({ stations, carb, gps, minP, maxP, priceRange, onSelectStatio
     });
 
     const range = priceRange?.[carb];
+    const marqueurs = [];
     stations.forEach(s => {
       if (!s.lat || !s.lng) return;
       const p   = s[carb];
@@ -818,9 +876,10 @@ function CarteView({ stations, carb, gps, minP, maxP, priceRange, onSelectStatio
         className: "", iconSize: [28,28], iconAnchor: [14,14],
       });
       const marker = L.marker([s.lat, s.lng], { icon, price: p });
-      marker.on("click", () => onSelectStation(s));
-      cluster.addLayer(marker);
+      marker.on("click", () => selectRef.current(s));
+      marqueurs.push(marker);
     });
+    cluster.addLayers(marqueurs);   // un seul calcul des regroupements au lieu d'un par station
 
     map.addLayer(cluster);
     markersRef.current = cluster;
@@ -838,7 +897,10 @@ function CarteView({ stations, carb, gps, minP, maxP, priceRange, onSelectStatio
     };
     calc();
     window.addEventListener("resize", calc);
-    return ()=>window.removeEventListener("resize", calc);
+    // L'en-tête peut grandir ou rétrécir (bandeau, choix du rayon) : la carte doit toujours s'arrêter au-dessus de la barre du bas
+    const obs = typeof ResizeObserver!=="undefined" ? new ResizeObserver(calc) : null;
+    obs?.observe(document.body);
+    return ()=>{ window.removeEventListener("resize", calc); obs?.disconnect(); };
   },[]);
   useEffect(()=>{ leafletRef.current?.invalidateSize(); },[h]);
 
@@ -864,6 +926,8 @@ function VilleChamp({ id, label, valeur, villes, onChoix, onPosition, positionEn
   const [ouvert, setOuvert] = useState(false);
   const [actif, setActif] = useState(0);
   const ecrit = useRef(false); // l'utilisateur est en train de taper : ne pas effacer son texte
+  const txtRef = useRef(txt); txtRef.current = txt;
+  const valeurRef = useRef(valeur); valeurRef.current = valeur;
   useEffect(()=>{ if (valeur) { setTxt(valeur.nom); ecrit.current=false; } else if (!ecrit.current) setTxt(""); },[valeur]);
   const sugg = useMemo(()=>ouvert ? chercherVilles(villes, txt) : [],[villes, txt, ouvert]);
   const choisir = v => { ecrit.current=false; onChoix({ type:"ville", nom:v.nom, cle:v.cle, lat:v.lat, lng:v.lng }); setOuvert(false); };
@@ -872,11 +936,19 @@ function VilleChamp({ id, label, valeur, villes, onChoix, onPosition, positionEn
     <div style={{position:"relative"}}>
       <label htmlFor={id} style={{fontSize:11,color:"var(--t3)",fontWeight:600}}>{label}</label>
       <div style={{display:"flex",gap:6,marginTop:4}}>
-        <input id={id} value={txt} autoComplete="off" role="combobox" aria-expanded={sugg.length>0} aria-controls={id+"-liste"} aria-autocomplete="list"
+        <input id={id} value={txt} autoComplete="off" autoCorrect="off" spellCheck={false} enterKeyHint="done" role="combobox" aria-expanded={sugg.length>0} aria-controls={id+"-liste"} aria-autocomplete="list"
+          aria-activedescendant={sugg.length ? id+"-opt-"+Math.min(actif, sugg.length-1) : undefined}
           placeholder="Ville ou municipalité…" style={champ}
           onChange={e=>{ ecrit.current=true; setTxt(e.target.value); setOuvert(true); setActif(0); if (valeur) onChoix(null); }}
           onFocus={e=>{ if (valeur?.type==="position") e.target.select(); setOuvert(true); }}
-          onBlur={()=>setTimeout(()=>setOuvert(false),150)}
+          onBlur={()=>setTimeout(()=>{
+            setOuvert(false);
+            // Ville tapée en entier sans toucher la suggestion : on la prend si elle est sans ambiguïté
+            if (!valeurRef.current && txtRef.current.trim()) {
+              const r = chercherVilles(villes, txtRef.current, 2);
+              if (r.length && (r.length===1 || r[0].cle===cleVille(txtRef.current))) choisir(r[0]);
+            }
+          },150)}
           onKeyDown={e=>{
             if (e.key==="ArrowDown") { e.preventDefault(); setActif(a=>Math.min(a+1, sugg.length-1)); }
             else if (e.key==="ArrowUp") { e.preventDefault(); setActif(a=>Math.max(a-1, 0)); }
@@ -893,13 +965,16 @@ function VilleChamp({ id, label, valeur, villes, onChoix, onPosition, positionEn
       {sugg.length>0 && (
         <ul id={id+"-liste"} role="listbox" style={{position:"absolute",left:0,right:0,top:"100%",zIndex:1500,listStyle:"none",margin:"4px 0 0",padding:4,background:"var(--surface)",border:"1px solid rgba(var(--ov),0.15)",borderRadius:12,boxShadow:"0 8px 24px rgba(0,0,0,0.35)"}}>
           {sugg.map((v,i)=>(
-            <li key={v.cle} role="option" aria-selected={i===actif} onMouseDown={e=>{ e.preventDefault(); choisir(v); }}
+            <li key={v.cle} id={id+"-opt-"+i} role="option" aria-selected={i===actif} onMouseDown={e=>{ e.preventDefault(); choisir(v); }}
               style={{padding:"9px 10px",borderRadius:8,cursor:"pointer",background:i===actif?"rgba(var(--ov),0.14)":"transparent",borderLeft:"3px solid "+(i===actif?"var(--accent)":"transparent")}}>
               <div style={{fontSize:14,color:"var(--t1)"}}>{v.nom}</div>
               <div style={{fontSize:11,color:"var(--t3)"}}>{v.region} · {v.n} station{v.n>1?"s":""}</div>
             </li>
           ))}
         </ul>
+      )}
+      {!valeur && !ouvert && txt.trim()!=="" && (
+        <div role="status" style={{fontSize:12,color:"var(--warn-t)",marginTop:4}}>Ville introuvable : choisis-en une dans la liste qui s'affiche quand tu tapes.</div>
       )}
     </div>
   );
@@ -925,9 +1000,19 @@ function TrajetVue({ villes, trajet, setTrajet, resultat, calcul, onCalculer, ca
   const { dep, arr } = trajet;
   const pret = dep && arr && !(dep.lat===arr.lat && dep.lng===arr.lng);
   const avecPrix = useMemo(()=>cands.filter(s=>s[carb]!=null),[cands,carb]);
-  const tries = useMemo(()=>[...avecPrix].sort(ordre==="trajet" ? (a,b)=>a.kmTrajet-b.kmTrajet : (a,b)=>(a[carb]-b[carb])||(a.detour-b.detour)),[avecPrix,ordre,carb]);
+  // Objet stable : sinon tous les marqueurs de la carte sont détruits et recréés à chaque affichage
+  const rangeCarte = useMemo(()=>({ [carb]: range }),[carb, range]);
   const aut = trajet.autonomie>0 ? trajet.autonomie : null;
   const atteignable = useCallback(s=>portee(s, aut).ok,[aut]);
+  // « Moins cher » : les stations à ta portée d'abord (sinon les moins chères, hors d'atteinte, passent en tête)
+  const tries = useMemo(()=>[...avecPrix].sort(ordre==="trajet" ? (a,b)=>a.kmTrajet-b.kmTrajet
+    : (a,b)=>(atteignable(b)-atteignable(a))||(a[carb]-b[carb])||(a.detour-b.detour)||(a.kmTrajet-b.kmTrajet)),[avecPrix,ordre,carb,atteignable]);
+  // Après un calcul, amener les résultats à l'écran (ils sont sous le formulaire)
+  const resultatRef = useRef(null), resultatVu = useRef(resultat);
+  useEffect(()=>{
+    if (resultat && resultat!==resultatVu.current) resultatRef.current?.scrollIntoView({ behavior:"smooth", block:"start" });
+    resultatVu.current = resultat;
+  },[resultat]);
   const comptees = useMemo(()=>avecPrix.filter(s=>compte(s) && atteignable(s)),[avecPrix,compte,atteignable]);
   const nbAtteignables = useMemo(()=>avecPrix.filter(atteignable).length,[avecPrix,atteignable]);
   // Point du trajet où l'autonomie est épuisée (affiché sur la carte)
@@ -1005,7 +1090,7 @@ function TrajetVue({ villes, trajet, setTrajet, resultat, calcul, onCalculer, ca
       </div>
 
       {resultat && (
-        <div style={{marginTop:14}}>
+        <div ref={resultatRef} style={{marginTop:14,scrollMarginTop:12}}>
           <div style={{fontSize:14,fontWeight:700}}>{resultat.depNom} → {resultat.arrNom}</div>
           {(dep?.nom!==resultat.depNom || arr?.nom!==resultat.arrNom || (dep?.type==="position" && (dep.lat!==resultat.dep.lat || dep.lng!==resultat.dep.lng))) && (
             <div role="status" style={{marginTop:6,fontSize:12,color:"var(--warn-t)"}}>Tu as changé le départ ou l'arrivée : touche « Trouver les stations » pour mettre à jour.</div>
@@ -1070,7 +1155,7 @@ function TrajetVue({ villes, trajet, setTrajet, resultat, calcul, onCalculer, ca
           )}
 
           {mode==="carte" && avecPrix.length>0 ? (
-            <div ref={carteRef} style={{scrollMarginTop:12}}><CarteView stations={avecPrix} carb={carb} gps={null} priceRange={{[carb]:range}} route={routeCarte} compact
+            <div ref={carteRef} style={{scrollMarginTop:12}}><CarteView stations={avecPrix} carb={carb} gps={null} priceRange={rangeCarte} route={routeCarte} compact
               focusStation={carteFocus} onFocusDone={()=>setCarteFocus(null)} onSelectStation={onSelect} /></div>
           ) : (
             <>
@@ -1102,8 +1187,10 @@ function TrajetVue({ villes, trajet, setTrajet, resultat, calcul, onCalculer, ca
 // ── Premier démarrage : quelques réglages pour personnaliser l'app ──
 function Accueil({ reglages:r, maj, onFin }) {
   const navDefaut = IS_IOS ? "apple" : "google";
+  const ref = useRef(null);
+  useFenetreModale(ref);
   return (
-    <div role="dialog" aria-modal="true" aria-labelledby="accueil-titre" style={{position:"fixed",inset:0,zIndex:3000,background:"var(--bg-grad)",overflowY:"auto"}}>
+    <div ref={ref} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="accueil-titre" style={{position:"fixed",inset:0,zIndex:3000,background:"var(--bg-grad)",overflowY:"auto",overscrollBehavior:"contain",outline:"none"}}>
       <div style={{maxWidth:480,margin:"0 auto",padding:"calc(env(safe-area-inset-top) + 20px) 20px calc(env(safe-area-inset-bottom) + 24px)",color:"var(--t1)",fontFamily:POLICE}}>
         <div style={{fontSize:36}}>⛽</div>
         <h1 id="accueil-titre" style={{fontSize:24,fontWeight:700,margin:"6px 0 4px"}}>Bienvenue sur {APP_NAME}</h1>
@@ -1146,7 +1233,8 @@ export default function App() {
   const [carb, setCarb]             = useState(()=>CARBURANTS.some(c=>c.key===reglages.carbDefaut) ? reglages.carbDefaut : "regulier");
   // Trajet a son propre carburant : celui des réglages par défaut (indépendant de l'onglet choisi dans Stations)
   const [carbTrajet, setCarbTrajet] = useState(()=>CARBURANTS.some(c=>c.key===reglages.carbDefaut) ? reglages.carbDefaut : "regulier");
-  useEffect(()=>{ if (CARBURANTS.some(c=>c.key===reglages.carbDefaut)) setCarbTrajet(reglages.carbDefaut); },[reglages.carbDefaut]);
+  // Un changement du carburant habituel (Réglages, écran de bienvenue) s'applique tout de suite, partout
+  useEffect(()=>{ if (CARBURANTS.some(c=>c.key===reglages.carbDefaut)) { setCarb(reglages.carbDefaut); setCarbTrajet(reglages.carbDefaut); } },[reglages.carbDefaut]);
   const [region, setRegion]         = useState(PREFS.region || "Toutes");
   const [favs, setFavs]             = useState(()=>new Set(Array.isArray(PREFS.favs)?PREFS.favs:[]));
   const [favsSig, setFavsSig] = useState(()=>PREFS.favsSig && typeof PREFS.favsSig==="object" ? PREFS.favsSig : {});
@@ -1173,6 +1261,8 @@ export default function App() {
   const [gpsLoading, setGpsLoading] = useState(false);
   const [rayon, setRayon]           = useState(()=>RAYONS.includes(reglages.rayonDefaut) ? reglages.rayonDefaut : 10);
   const [modeGps, setModeGps]       = useState(false);
+  // Idem pour le rayon choisi dans les Réglages
+  useEffect(()=>{ if (RAYONS.includes(reglages.rayonDefaut)) setRayon(reglages.rayonDefaut); },[reglages.rayonDefaut]);
   const topRef = useRef(null);
   // Trajet : départ/arrivée ({type:"ville"|"position", nom, lat, lng}), itinéraire calculé
   const [trajet, setTrajet]         = useState({ dep:null, arr:null });
@@ -1181,18 +1271,7 @@ export default function App() {
 
   // Charger les données : cache local d'abord (affichage instantané), puis réseau
   // Thème
-  useEffect(()=>{
-    const el = document.documentElement;
-    const THEMES = { clair:"light", sombre:"dark", chats:"chats" };
-    if (THEMES[reglages.theme]) el.dataset.theme = THEMES[reglages.theme]; else delete el.dataset.theme;
-    // Couleur de la barre d'état : suivre le thème choisi dans l'app, pas seulement celui du téléphone
-    document.querySelectorAll('meta[name="theme-color"]').forEach(m=>{
-      if (!m.dataset.media) m.dataset.media = m.getAttribute("media") || "";
-      if (reglages.theme==="auto") m.setAttribute("media", m.dataset.media);
-      else { m.removeAttribute("media"); m.setAttribute("content", ({ clair:"#f8fafc", chats:"#fff4f6" })[reglages.theme] ?? "#0f172a"); }
-    });
-    if (reglages.theme==="auto") document.querySelectorAll('meta[name="theme-color"]').forEach(m=>m.setAttribute("content", /dark/.test(m.dataset.media) ? "#0f172a" : "#f8fafc"));
-  },[reglages.theme]);
+  useEffect(()=>{ appliquerTheme(reglages.theme); },[reglages.theme]);
 
   // config.json : lien de don + compteur de visites (modifiables sans reconstruire l'app)
   const [config, setConfig] = useState({});
@@ -1211,7 +1290,10 @@ export default function App() {
   },[config.goat, reglages.stats]);
 
   const dernierTs = useRef(null);
+  const enCharge = useRef(false);
   const charger = useCallback(async ()=>{
+    if (enCharge.current) return;   // retour dans l'app + minuterie en même temps : une seule requête
+    enCharge.current = true;
     setRefreshing(true);
     try {
       const r = await fetch(DATA_URL, { cache:"no-cache" });
@@ -1226,6 +1308,7 @@ export default function App() {
     } catch (e) {
       setLoadErr("Impossible de récupérer les derniers prix. Vérifie ta connexion.");
     } finally {
+      enCharge.current = false;
       setRefreshing(false);
     }
   },[]);
@@ -1298,7 +1381,23 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[]);
 
-  const disableGps = ()=>{ setModeGps(false); setTri("prix_asc"); };
+  // « Autour de moi » : la position est rafraîchie quand on revient dans l'app (on a peut-être roulé depuis)
+  const suiviGps = useRef({}); suiviGps.current = { modeGps, t: gps?.t };
+  useEffect(()=>{
+    const onVis = ()=>{
+      const { modeGps:actif, t } = suiviGps.current;
+      if (document.visibilityState!=="visible" || !actif || !navigator.geolocation || Date.now()-(t||0) < 120000) return;
+      navigator.geolocation.getCurrentPosition(
+        pos=>setGps({ lat:pos.coords.latitude, lng:pos.coords.longitude, t:Date.now() }),
+        ()=>{ /* on garde l'ancienne position */ },
+        { enableHighAccuracy:true, timeout:12000, maximumAge:60000 });
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return ()=>document.removeEventListener("visibilitychange", onVis);
+  },[]);
+
+  // Quitter « Autour de moi » : on ne touche au tri que s'il était « plus proche d'abord »
+  const disableGps = ()=>{ setModeGps(false); setTri(t=>t==="distance" ? "prix_asc" : t); };
 
   // ── Trajet ──
   const villes = useMemo(()=>villesDepuisStations(stations),[stations]);
@@ -1345,6 +1444,8 @@ export default function App() {
 
   const REGIONS = useMemo(()=>["Toutes",...new Set(stations.map(s=>s.region).filter(Boolean).sort())],[stations]);
 
+  useEffect(()=>{ if (stations.length && region!=="Toutes" && !REGIONS.includes(region)) setRegion("Toutes"); },[REGIONS, region, stations.length]);
+
   const maRive = useMemo(()=>gps ? riveUtilisateur(stations, gps.lat, gps.lng) : null,[stations,gps]);
   const stationsWithDist = useMemo(()=>{
     if (!gps) return stations;   // distance affichée dès que la position est connue, même hors « Autour de moi »
@@ -1363,11 +1464,11 @@ export default function App() {
   const filtered = useMemo(()=>{
     let s=zone.filter(st=>st[carb]!=null);
     if (q.trim()) { const mots=sansAccent(q).split(/\s+/).filter(Boolean); s=s.filter(st=>mots.every(m=>st.cle.includes(m))); }
-    if (tri==="prix_asc")  return [...s].sort((a,b)=>a[carb]-b[carb]);
-    if (tri==="prix_desc") return [...s].sort((a,b)=>b[carb]-a[carb]);
-    if (tri==="nom")       return [...s].sort((a,b)=>a.banniere.localeCompare(b.banniere));
-    if (tri==="region")    return [...s].sort((a,b)=>a.region.localeCompare(b.region));
-    if (tri==="distance")  return [...s].sort((a,b)=>(a.dist??999)-(b.dist??999));
+    if (tri==="prix_asc")  return [...s].sort((a,b)=>(a[carb]-b[carb]) || departage(a,b));
+    if (tri==="prix_desc") return [...s].sort((a,b)=>(b[carb]-a[carb]) || departage(a,b));
+    if (tri==="nom")       return [...s].sort((a,b)=>COLLATEUR.compare(a.banniere,b.banniere) || (a[carb]-b[carb]));
+    if (tri==="region")    return [...s].sort((a,b)=>COLLATEUR.compare(a.region,b.region) || (a[carb]-b[carb]));
+    if (tri==="distance")  return [...s].sort((a,b)=>((a.dist??Infinity)-(b.dist??Infinity)) || (a[carb]-b[carb]));
     return s;
   },[zone,carb,q,tri]);
 
@@ -1388,7 +1489,8 @@ export default function App() {
   const maj     = dataTs ? fmtMaj(dataTs) : null;
   const cInfo   = CARBURANTS.find(c=>c.key===carb);
   const totPg   = Math.ceil(filtered.length/PG);
-  const paged   = filtered.slice((page-1)*PG,page*PG);
+  const pageOk  = Math.min(page, Math.max(1, totPg));   // la liste a pu raccourcir (nouveaux prix) pendant qu'on était page 3
+  const paged   = filtered.slice((pageOk-1)*PG,pageOk*PG);
   const sansCe  = zone.filter(s=>s[carb]==null).length;
   const scroll  = ()=>topRef.current?.scrollIntoView({behavior:"smooth"});
 
@@ -1434,7 +1536,8 @@ export default function App() {
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-thumb { background: var(--scroll); border-radius: 2px; }
         .tab { transition: all 0.2s; cursor: pointer; border: none; font-family: inherit; }
-        select, input { -webkit-appearance: none; }
+        select, input { -webkit-appearance: none; appearance: none; }
+        input[type=search]::-webkit-search-cancel-button, input[type=search]::-webkit-search-decoration { -webkit-appearance: none; display: none; }
         @keyframes fadeUp { from{transform:translateY(12px);opacity:0} to{transform:translateY(0);opacity:1} }
         @keyframes sheetUp { from{transform:translateY(100%)} to{transform:translateY(0)} }
         @keyframes spin { to{transform:rotate(360deg)} }
@@ -1516,12 +1619,12 @@ export default function App() {
               stations={stationsCarte}
               carb={carb}
               gps={gps}
-              minP={minP} maxP={maxP}
               priceRange={priceRange}
               focusStation={carteFocus}
               onFocusDone={()=>setCarteFocus(null)}
               onSelectStation={s=>setSelected(s)}
-              cadrer={!modeGps && region!=="Toutes"}
+              cle={modeGps&&gps ? "gps:"+rayon : "region:"+region}
+              ajuster={(modeGps&&!!gps) || region!=="Toutes"}
             />
           )}
         </div>
@@ -1574,7 +1677,7 @@ export default function App() {
         <div style={{padding:"14px 20px"}} ref={topRef}>
           {bienvenue && !modeGps && (
             <div style={{marginBottom:14,padding:"14px 16px",borderRadius:"var(--rayon-carte,16px)",background:"rgba(var(--ov),0.05)",border:"1px solid var(--accent)"}}>
-              <div style={{fontSize:15,fontWeight:700,marginBottom:4}}>Bienvenue sur {APP_NAME} 👋</div>
+              <div style={{fontSize:15,fontWeight:700,marginBottom:4}}>Les prix près de chez toi 📍</div>
               <div style={{fontSize:13,color:"var(--t2)",lineHeight:1.5,marginBottom:12}}>Pour voir les prix près de chez toi, localise-toi ou choisis ta région.</div>
               <div style={{display:"flex",gap:8}}>
                 <button className="tab" onClick={requestGps} style={{flex:1,padding:"10px",borderRadius:12,background:"var(--accent)",color:ON_COLOR,fontSize:13,fontWeight:700}}>📍 Me localiser</button>
@@ -1596,20 +1699,20 @@ export default function App() {
           <div style={{position:"relative",marginBottom:10}}>
             <span style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",fontSize:14,color:"var(--t3)"}}>{"🔍"}</span>
             {q && <button onClick={()=>setQ("")} aria-label="Effacer la recherche" style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",width:28,height:28,borderRadius:"50%",border:"none",background:"rgba(var(--ov),0.12)",color:"var(--t2)",fontSize:14,cursor:"pointer",zIndex:1}}>✕</button>}
-            <input value={q} aria-label="Rechercher une station" onChange={e=>setQ(e.target.value)} placeholder="Chercher : Shell, rue, ville, code postal…" style={{width:"100%",background:"rgba(var(--ov),0.06)",border:"1px solid rgba(var(--ov),0.1)",borderRadius:12,padding:"10px 12px 10px 36px",color:"var(--t1)",fontSize:14,fontFamily:"inherit",outline:"none"}} />
+            <input value={q} type="search" enterKeyHint="search" autoCorrect="off" spellCheck={false} aria-label="Rechercher une station" onChange={e=>setQ(e.target.value)} placeholder="Chercher : Shell, rue, ville, code postal…" style={{width:"100%",background:"rgba(var(--ov),0.06)",border:"1px solid rgba(var(--ov),0.1)",borderRadius:12,padding:"10px 38px 10px 36px",color:"var(--t1)",fontSize:16,fontFamily:"inherit",outline:"none"}} />
           </div>
           <div style={{display:"flex",gap:8,marginBottom:12}}>
             {!modeGps && (
               <label style={{flex:1,display:"flex",flexDirection:"column",gap:4,minWidth:0}}>
                 <span style={{fontSize:11,color:"var(--t3)",fontWeight:600}}>Région</span>
-                <select ref={regionRef} value={region} onChange={e=>setRegion(e.target.value)} style={{width:"100%",background:"rgba(var(--ov),0.06)",border:"1px solid rgba(var(--ov),0.1)",borderRadius:10,padding:"9px 10px",color:"var(--t1)",fontSize:13,fontFamily:"inherit",outline:"none"}}>
+                <select ref={regionRef} value={region} onChange={e=>setRegion(e.target.value)} style={{width:"100%",background:"rgba(var(--ov),0.06)",border:"1px solid rgba(var(--ov),0.1)",borderRadius:10,padding:"9px 10px",color:"var(--t1)",fontSize:16,fontFamily:"inherit",outline:"none",textOverflow:"ellipsis"}}>
                   {REGIONS.map(r=><option key={r} value={r} style={{background:"var(--surface)"}}>{r==="Toutes"?"Tout le Québec":r}</option>)}
                 </select>
               </label>
             )}
             <label style={{flex:1,display:"flex",flexDirection:"column",gap:4,minWidth:0}}>
               <span style={{fontSize:11,color:"var(--t3)",fontWeight:600}}>Trier par</span>
-              <select value={tri} onChange={e=>setTri(e.target.value)} style={{width:"100%",background:"rgba(var(--ov),0.06)",border:"1px solid rgba(var(--ov),0.1)",borderRadius:10,padding:"9px 10px",color:"var(--t1)",fontSize:13,fontFamily:"inherit",outline:"none"}}>
+              <select value={tri} onChange={e=>setTri(e.target.value)} style={{width:"100%",background:"rgba(var(--ov),0.06)",border:"1px solid rgba(var(--ov),0.1)",borderRadius:10,padding:"9px 10px",color:"var(--t1)",fontSize:16,fontFamily:"inherit",outline:"none",textOverflow:"ellipsis"}}>
                 {Object.entries(TRIS).filter(([k])=>(gps || k!=="distance") && (!modeGps || k!=="region")).map(([k,l])=>(
                   <option key={k} value={k} style={{background:"var(--surface)"}}>{l}</option>
                 ))}
@@ -1633,9 +1736,9 @@ export default function App() {
           ))}
           {totPg>1 && (
             <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:10,padding:"16px 0"}}>
-              <button className="tab" onClick={()=>{setPage(p=>Math.max(1,p-1));scroll();}} disabled={page===1} style={{padding:"8px 16px",borderRadius:10,background:page===1?"rgba(var(--ov),0.03)":"rgba(var(--ov),0.1)",color:page===1?"var(--t3)":"var(--t3)",fontSize:13}}>{"←"} Précédente</button>
-              <span style={{fontSize:12,color:"var(--t3)"}}>Page {page} sur {totPg}</span>
-              <button className="tab" onClick={()=>{setPage(p=>Math.min(totPg,p+1));scroll();}} disabled={page===totPg} style={{padding:"8px 16px",borderRadius:10,background:page===totPg?"rgba(var(--ov),0.03)":"rgba(var(--ov),0.1)",color:page===totPg?"var(--t3)":"var(--t3)",fontSize:13}}>Suivante {"→"}</button>
+              <button className="tab" onClick={()=>{setPage(Math.max(1,pageOk-1));scroll();}} disabled={pageOk===1} style={{padding:"10px 16px",borderRadius:10,background:pageOk===1?"rgba(var(--ov),0.03)":"rgba(var(--ov),0.1)",color:pageOk===1?"var(--t3)":"var(--t1)",opacity:pageOk===1?0.5:1,fontSize:13}}>{"←"} Précédente</button>
+              <span style={{fontSize:12,color:"var(--t3)"}}>Page {pageOk} sur {totPg}</span>
+              <button className="tab" onClick={()=>{setPage(Math.min(totPg,pageOk+1));scroll();}} disabled={pageOk===totPg} style={{padding:"10px 16px",borderRadius:10,background:pageOk===totPg?"rgba(var(--ov),0.03)":"rgba(var(--ov),0.1)",color:pageOk===totPg?"var(--t3)":"var(--t1)",opacity:pageOk===totPg?0.5:1,fontSize:13}}>Suivante {"→"}</button>
             </div>
           )}
           <div style={{padding:"4px 0 36px",fontSize:11,color:"var(--t3)",textAlign:"center",lineHeight:1.6}}>
@@ -1645,7 +1748,7 @@ export default function App() {
         </div>
       )}
 
-      {accueil && <Accueil reglages={reglages} maj={majReglage} onFin={()=>{ setAccueil(false); if (CARBURANTS.some(c=>c.key===reglages.carbDefaut)) setCarb(reglages.carbDefaut); }} />}
+      {accueil && <Accueil reglages={reglages} maj={majReglage} onFin={()=>setAccueil(false)} />}
 
       {selected && <StationSheet station={vue==="trajet" ? selected : (stationsWithDist.find(x=>x.id===selected.id) ?? selected)} carb={vue==="trajet"?carbTrajet:carb} gps={vue==="trajet"?null:gps} onLocaliser={positionTrajet}
         priceRange={vue==="trajet"?rangeTrajet:favs.has(selected.id)&&vue==="favoris"?rangeQuebec:priceRange} onClose={()=>setSelected(null)}
